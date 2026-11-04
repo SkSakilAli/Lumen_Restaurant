@@ -1,0 +1,93 @@
+{
+ "actions": [],
+ "creation": "2026-09-23 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "item_code",
+  "item_name",
+  "qty",
+  "rate",
+  "amount",
+  "note",
+  "modifiers",
+  "line_id",
+  "addon_of"
+ ],
+ "fields": [
+  {
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Item Name"
+  },
+  {
+   "fieldname": "qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Qty",
+   "reqd": 1
+  },
+  {
+   "fieldname": "rate",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Rate"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount"
+  },
+  {
+   "description": "How the guest wants it: no onions, well done.",
+   "fieldname": "note",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Note"
+  },
+  {
+   "description": "The guest's choices from the dish's add-on groups, as the till keeps them.",
+   "fieldname": "modifiers",
+   "fieldtype": "Small Text",
+   "label": "Add-ons",
+   "read_only": 1
+  },
+  {
+   "fieldname": "line_id",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Line"
+  },
+  {
+   "description": "A paid add-on on its own line: the line of the dish it belongs to.",
+   "fieldname": "addon_of",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Add-on of"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-09-28 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Lumen Restaurants",
+ "name": "POS Restaurant Order Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

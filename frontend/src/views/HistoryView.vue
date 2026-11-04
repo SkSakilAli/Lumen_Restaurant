@@ -1,0 +1,546 @@
+<!-- Copyright (c) 2026 Lumen Solutions
+     SPDX-License-Identifier: AGPL-3.0-only
+     "LumenPOS" is a trademark of Lumen Solutions. See TRADEMARKS.md. -->
+<template>
+  <div class="history">
+    <div class="card list">
+      <div class="list-head" data-tour="history-search">
+        <div class="search-box">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m21 21-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <input
+            v-model="filters.search"
+            :placeholder="t('Invoice no, customer, mobile or order ID…')"
+            @input="debouncedLoad"
+          />
+        </div>
+        <button class="btn btn-outline" :class="{ 'filters-on': activeFilterCount }" @click="showFilters = !showFilters">
+          {{ t('Filters') }}{{ activeFilterCount ? ` (${activeFilterCount})` : '' }} {{ showFilters ? '▴' : '▾' }}
+        </button>
+        <button class="btn btn-outline" @click="load"><Icon name="refresh" /></button>
+      </div>
+
+      <div v-if="showFilters" class="filter-grid">
+        <label class="f-field">
+          <span>{{ t('From date') }}</span>
+          <input type="date" v-model="filters.date_from" @change="load" />
+        </label>
+        <label class="f-field">
+          <span>{{ t('To date') }}</span>
+          <input type="date" v-model="filters.date_to" @change="load" />
+        </label>
+        <label class="f-field">
+          <span>{{ t('Status') }}</span>
+          <select v-model="filters.status" @change="load">
+            <option value="">{{ t('All') }}</option>
+            <option>Paid</option>
+            <option>Consolidated</option>
+            <option>Return</option>
+            <option>Draft</option>
+            <option>Cancelled</option>
+          </select>
+        </label>
+        <label class="f-field">
+          <span>{{ t('Document status') }}</span>
+          <select v-model="filters.docstatus" @change="load">
+            <option>Submitted</option>
+            <option>Draft</option>
+            <option>Cancelled</option>
+            <option>All</option>
+          </select>
+        </label>
+        <label class="f-field">
+          <span>{{ t('Channel') }}</span>
+          <select v-model="filters.app_type" @change="load">
+            <option value="">{{ t('All') }}</option>
+            <option>Walk-in</option>
+            <option v-for="app in session.settings.delivery_apps" :key="app.app_name" :value="app.app_name">
+              {{ app.app_name }}
+            </option>
+          </select>
+        </label>
+        <label class="f-field">
+          <span>{{ t('Online order') }}</span>
+          <select v-model="filters.online_order" @change="load">
+            <option value="">{{ t('Any') }}</option>
+            <option value="1">{{ t('Online only') }}</option>
+            <option value="0">{{ t('In-store only') }}</option>
+          </select>
+        </label>
+        <label class="f-field">
+          <span>{{ t('Payment method') }}</span>
+          <select v-model="filters.payment_mode" @change="load">
+            <option value="">{{ t('Any') }}</option>
+            <option v-for="m in paymentModeOptions" :key="m" :value="m">{{ session.modeLabel(m) }}</option>
+          </select>
+        </label>
+        <label class="f-field">
+          <span>{{ t('Outlet') }}</span>
+          <select v-model="profileFilter" @change="load">
+            <option value="">{{ session.outletLabel(session.posProfile) }} {{ t('(this register)') }}</option>
+            <option value="__all__">{{ t('All outlets') }}</option>
+            <option v-for="profile in otherProfiles" :key="profile" :value="profile">{{ session.outletLabel(profile) }}</option>
+          </select>
+        </label>
+        <!-- Several companies: all outlets of one company, or of all of them. -->
+        <label v-if="session.multiCompany" class="f-field">
+          <span>{{ t('Company') }}</span>
+          <select v-model="companyFilter" @change="load">
+            <option value="">{{ t('All companies') }}</option>
+            <option v-for="c in session.companies" :key="c" :value="c">{{ c }}</option>
+          </select>
+        </label>
+        <label class="f-field">
+          <span>{{ t('Item') }}</span>
+          <input v-model="filters.item" :placeholder="t('Code or name')" @input="debouncedLoad" />
+        </label>
+        <label class="f-field">
+          <span>{{ t('Serial no') }}</span>
+          <input v-model="filters.serial_no" :placeholder="t('Serial number')" @input="debouncedLoad" />
+        </label>
+        <label class="f-field">
+          <span>{{ t('Total from') }}</span>
+          <input type="number" min="0" v-model.number="filters.total_min" @change="load" />
+        </label>
+        <label class="f-field">
+          <span>{{ t('Total to') }}</span>
+          <input type="number" min="0" v-model.number="filters.total_max" @change="load" />
+        </label>
+        <div class="f-actions">
+          <button class="btn btn-ghost" @click="clearFilters">{{ t('Clear filters') }}</button>
+        </div>
+      </div>
+
+      <!-- Without a connection: this device's own sales of the shift, which
+           it can take back (refund.js). Everything else needs the server. -->
+      <template v-if="session.offline">
+        <div v-if="!session.settings.offline_returns" class="muted empty">{{ t('Sales history needs a connection.') }}</div>
+        <template v-else>
+          <div class="offline-head">
+            <div class="offline-title"><Icon name="upload" /> {{ t("This device's sales in this shift") }}</div>
+            <div class="muted small">
+              {{ t('Without a connection, a sale made here in this shift can be taken back. The return is sent when the connection is back. The full history needs a connection.') }}
+            </div>
+          </div>
+          <div v-if="!localSales.length" class="muted empty">{{ t('No sales on this device in this shift yet.') }}</div>
+          <div v-else-if="!localShown.length" class="muted empty">{{ t('No sales match') }}</div>
+          <button
+            v-for="sale in localShown"
+            :key="sale.key"
+            class="sale-row local-row"
+            :class="{ blocked: blockerOf(sale) }"
+            @click="refundLocalSale(sale)"
+          >
+            <div class="sale-info">
+              <div class="sale-customer">
+                {{ sale.customer_name }}
+                <span v-if="sale.queued" class="tag amber">{{ t('NOT SENT YET') }}</span>
+                <span v-if="returnedCount(sale)" class="tag red">{{ t('{n} RETURNED', { n: returnedCount(sale) }) }}</span>
+              </div>
+              <!-- Each part isolated: in Arabic the count sat at one end of
+                   the line and its word at the other. -->
+              <div class="muted small">
+                <bdi>{{ sale.name || t('Waiting to be sent') }}</bdi> · <bdi>{{ shortTime(sale.at) }}</bdi> · <bdi>{{ t('{n} items', { n: itemCount(sale) }) }}</bdi>
+              </div>
+              <div v-if="blockerOf(sale)" class="muted small why">{{ t(blockerOf(sale)) }}</div>
+            </div>
+            <div class="sale-right">
+              <div class="sale-amount">{{ money(sale.total, sale.currency) }}</div>
+              <span v-if="!blockerOf(sale)" class="refund-chip">{{ t('Refund') }}</span>
+            </div>
+          </button>
+        </template>
+      </template>
+      <div v-else-if="loading" class="muted empty">{{ t('Loading…') }}</div>
+      <div v-else-if="!sales.length" class="muted empty">{{ t('No sales match') }}</div>
+      <!-- The history loaded before the connection went stays out of sight:
+           offline, only this device's own sales can be acted on. -->
+      <template v-if="!session.offline">
+      <button
+        v-for="sale in sales"
+        :key="sale.name"
+        class="sale-row"
+        :data-tour="!sale.is_return && sale.docstatus === 1 ? 'history-row' : undefined"
+        :class="{ active: receipt?.name === sale.name }"
+        @click="show(sale.name)"
+      >
+        <div class="sale-info">
+          <div class="sale-customer">
+            {{ sale.customer_name }}
+            <span v-if="sale.is_return" class="tag red">{{ t('REFUND') }}</span>
+            <span v-if="sale.is_exchange" class="tag purple"><Icon name="exchange" /> {{ t('EXCHANGE') }}</span>
+            <span v-if="sale.docstatus === 2" class="tag red">{{ t('CANCELLED') }}</span>
+            <span v-else-if="sale.docstatus === 0" class="tag amber">{{ t('DRAFT') }}</span>
+            <span v-if="sale.app_type" class="tag blue"><Icon name="bike" /> {{ sale.app_type }}</span>
+            <span v-if="sale.online_order && !sale.app_type" class="tag blue">{{ t('ONLINE') }}</span>
+          </div>
+          <div class="muted small">
+            {{ sale.name }} · {{ shortTime(sale.posting_date + ' ' + sale.posting_time) }}<span v-if="sale.owner_name"> · <Icon name="person" /> {{ sale.owner_name }}</span><span v-if="sale.mobile_no"> · {{ sale.mobile_no }}</span><span v-if="sale.order_id"> · {{ t('Order') }} {{ sale.order_id }}</span><span v-if="profileFilter || companyFilter"> · {{ sale.pos_profile }}</span><span v-if="session.multiCompany && (profileFilter === '__all__' || companyFilter)"> · {{ sale.company }}</span>
+          </div>
+        </div>
+        <div class="sale-right">
+          <div class="sale-amount" :class="{ neg: sale.grand_total < 0 }">{{ money(sale.grand_total, sale.currency) }}</div>
+          <div class="muted small status-line">{{ t('status:' + sale.status) }}</div>
+          <div v-if="sale.payment_modes" class="muted small pay-line"><Icon name="card" /> {{ session.modeLabel(sale.payment_modes) }}</div>
+        </div>
+      </button>
+      </template>
+    </div>
+
+    <ReceiptModal
+      v-if="receipt"
+      :receipt="receipt"
+      :can-refund="session.permissions.can_return !== false"
+      :can-exchange="session.permissions.can_exchange !== false"
+      reprint
+      @close="receipt = null"
+      @refund="startRefund"
+      @exchange="startExchange"
+    />
+    <RefundModal
+      v-if="refundInvoice"
+      :invoice="refundInvoice"
+      :mode="refundMode"
+      @close="refundInvoice = null"
+      @done="onRefundDone"
+      @exchange="onExchangePicked"
+    />
+    <RefundModal
+      v-if="refundLocal"
+      :local="refundLocal"
+      @close="refundLocal = null"
+      @done="onLocalRefundDone"
+    />
+  </div>
+</template>
+
+<script setup>
+import Icon from '../components/Icon.vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { call } from '../api'
+import { useSessionStore } from '../stores/session'
+import { useCartStore } from '../stores/cart'
+import { money, shortTime } from '../format'
+import { t } from '../i18n'
+import { offlineBlocker } from '../refund'
+import ReceiptModal from '../components/ReceiptModal.vue'
+import RefundModal from '../components/RefundModal.vue'
+
+const session = useSessionStore()
+const cart = useCartStore()
+const router = useRouter()
+const sales = ref([])
+const loading = ref(true)
+const receipt = ref(null)
+const refundInvoice = ref(null)
+const refundMode = ref('refund') // 'refund' | 'exchange'
+const showFilters = ref(false)
+const profileFilter = ref('')
+const companyFilter = ref('')
+let timer = null
+
+const emptyFilters = () => ({
+  search: '',
+  date_from: '',
+  date_to: '',
+  status: '',
+  docstatus: 'Submitted',
+  app_type: '',
+  online_order: '',
+  item: '',
+  serial_no: '',
+  payment_mode: '',
+  total_min: null,
+  total_max: null,
+})
+const filters = ref(emptyFilters())
+
+const otherProfiles = computed(() =>
+  session.availableProfiles.filter((profile) => profile !== session.posProfile)
+)
+
+// Payment methods offered in the filter: the outlet's modes plus Store Credit /
+// Gift Card (refund/redeem tenders that also appear on invoices).
+const paymentModeOptions = computed(() => {
+  const modes = (session.paymentModes || []).map((m) => m.mode_of_payment)
+  for (const extra of [session.storeCreditMode, session.giftCardMode]) {
+    if (extra && !modes.includes(extra)) modes.push(extra)
+  }
+  return modes
+})
+
+const activeFilterCount = computed(() => {
+  const f = filters.value
+  let count = 0
+  if (f.date_from || f.date_to) count++
+  if (f.status) count++
+  if (f.docstatus !== 'Submitted') count++
+  if (f.app_type) count++
+  if (f.online_order) count++
+  if (f.item) count++
+  if (f.serial_no) count++
+  if (f.payment_mode) count++
+  if (f.total_min != null && f.total_min !== '') count++
+  if (f.total_max != null && f.total_max !== '') count++
+  if (profileFilter.value) count++
+  if (companyFilter.value) count++
+  return count
+})
+
+const route = useRoute()
+
+// Deep link from a customer's transaction list: /history?invoice=XYZ, one
+// money-flow path (refunds live here), rather than duplicating the refund flow
+// into the Customers screen.
+onMounted(async () => {
+  const invoice = route.query.invoice
+  if (invoice) {
+    filters.value.search = String(invoice)
+    profileFilter.value = '__all__' // the sale may belong to another outlet
+    await load()
+    const hit = sales.value.find((r) => r.name === invoice) || sales.value[0]
+    if (hit) openReceipt(hit)
+    return
+  }
+  load()
+})
+
+function debouncedLoad() {
+  clearTimeout(timer)
+  timer = setTimeout(load, 300)
+}
+
+// Typing fires several searches. A slow EARLY one returning last used to wipe
+// the correct results, so each request carries a sequence number and only the
+// newest may write.
+let searchSeq = 0
+
+async function load() {
+  if (session.offline) {
+    loading.value = false
+    return
+  }
+  const seq = ++searchSeq
+  loading.value = true
+  try {
+    // pos_profile is always sent (drives which backend table to read); a
+    // specific filter overrides it, and all_profiles=1 ignores it as a filter.
+    const payload = { ...filters.value, limit: 100, pos_profile: session.posProfile }
+    if (profileFilter.value === '__all__') {
+      payload.all_profiles = 1
+    } else if (profileFilter.value) {
+      payload.pos_profile = profileFilter.value
+    }
+    // A company alone means every outlet of that company.
+    if (companyFilter.value) {
+      payload.company = companyFilter.value
+      if (!profileFilter.value) payload.all_profiles = 1
+    }
+    const rows = await call('lumen_restaurants.api.sales.search_sales', { filters: payload })
+    if (seq !== searchSeq) return // a newer search already answered
+    sales.value = rows
+  } catch (e) {
+    if (seq === searchSeq) session.notify(e.message, true)
+  } finally {
+    if (seq === searchSeq) loading.value = false
+  }
+}
+
+function clearFilters() {
+  filters.value = emptyFilters()
+  profileFilter.value = ''
+  companyFilter.value = ''
+  load()
+}
+
+async function show(name) {
+  receipt.value = await call('lumen_restaurants.api.sales.get_receipt', { invoice: name })
+}
+
+function startRefund(invoice) {
+  receipt.value = null
+  refundMode.value = 'refund'
+  refundInvoice.value = invoice
+}
+
+// The same screen picks what comes back, then the till moves to Sell for what
+// the customer takes instead. Nothing has posted at this point.
+function startExchange(invoice) {
+  receipt.value = null
+  refundMode.value = 'exchange'
+  refundInvoice.value = invoice
+}
+
+function onExchangePicked(picked) {
+  refundInvoice.value = null
+  cart.startExchange(picked)
+  session.notify(t('Now pick what the customer is taking instead'))
+  router.push('/')
+}
+
+async function onRefundDone(returnReceipt) {
+  refundInvoice.value = null
+  receipt.value = returnReceipt
+  await load()
+}
+
+// --- without a connection: this device's sales of the shift -----------------
+const localSales = ref([])
+const refundLocal = ref(null)
+// The search box works on them too: a busy till makes hundreds of sales a
+// shift. Invoice number, customer, or an item's code or name.
+const localShown = computed(() => {
+  const term = (filters.value.search || '').trim().toLowerCase()
+  if (!term) return localSales.value
+  return localSales.value.filter((sale) =>
+    [sale.name, sale.customer_name, sale.customer, ...(sale.lines || []).flatMap((l) => [l.item_code, l.item_name])]
+      .some((value) => (value || '').toLowerCase().includes(term))
+  )
+})
+
+async function loadLocal() {
+  localSales.value = session.offline && session.settings?.offline_returns ? await session.loadShiftSales() : []
+}
+
+function blockerOf(sale) {
+  return offlineBlocker(sale, {
+    session: session.registerSession?.name,
+    settings: session.settings,
+    permissions: session.permissions,
+  })
+}
+
+function itemCount(sale) {
+  return (sale.lines || []).reduce((sum, line) => sum + (Number(line.qty) || 0), 0)
+}
+
+function returnedCount(sale) {
+  return Object.values(sale.returned || {}).reduce((sum, qty) => sum + (Number(qty) || 0), 0)
+}
+
+function refundLocalSale(sale) {
+  const why = blockerOf(sale)
+  if (why) {
+    session.notify(t(why), true)
+    return
+  }
+  refundLocal.value = sale
+}
+
+async function onLocalRefundDone(returnReceipt) {
+  refundLocal.value = null
+  receipt.value = returnReceipt
+  await loadLocal()
+}
+
+onMounted(loadLocal)
+// The list follows the connection: offline it shows this device's sales,
+// back online the full history (load) takes over.
+watch(
+  () => session.offline,
+  (off) => (off ? loadLocal() : load())
+)
+</script>
+
+<style scoped>
+.history {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+}
+.list { max-width: 860px; margin: 0 auto; }
+.list-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.search-box {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.search-box svg {
+  position: absolute;
+  left: 11px;
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+}
+.search-box input {
+  width: 100%;
+  padding: 9px 12px 9px 34px;
+}
+.filters-on { border-color: var(--brand); color: var(--brand); }
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.f-field { display: flex; flex-direction: column; gap: 4px; }
+.f-field span {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.f-field input, .f-field select { padding: 7px 9px; font-size: 13px; }
+.f-actions { display: flex; align-items: flex-end; }
+.sale-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.sale-row:hover, .sale-row.active { background: var(--surface-2); }
+.sale-customer { font-weight: 600; }
+.tag {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  margin-left: 6px;
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.tag.red { color: #b5231f; background: rgba(226, 48, 48, 0.14); }
+.tag.amber { color: #9a6a0a; background: rgba(245, 166, 35, 0.18); }
+.tag.blue { color: var(--brand-dark); background: rgba(20, 99, 255, 0.12); }
+.tag.purple { color: #5b2bbf; background: rgba(123, 47, 242, 0.14); }
+/* Dark mode: faint tints + dark text are unreadable, brighten both. */
+html[data-theme='dark'] .tag.red { color: #ff9b9b; background: rgba(226, 48, 48, 0.26); }
+html[data-theme='dark'] .tag.amber { color: #ffce85; background: rgba(245, 166, 35, 0.26); }
+html[data-theme='dark'] .tag.blue { color: #b8c7ff; background: rgba(20, 99, 255, 0.30); }
+html[data-theme='dark'] .tag.purple { color: #cbb8ff; background: rgba(123, 47, 242, 0.34); }
+.sale-right { text-align: right; }
+.sale-amount { font-weight: 700; }
+.sale-amount.neg { color: var(--red); }
+.status-line { margin-top: 1px; }
+.pay-line { margin-top: 1px; display: inline-flex; align-items: center; gap: 4px; justify-content: flex-end; max-width: 220px; }
+.small { font-size: 12px; }
+.empty { padding: 40px; text-align: center; }
+.offline-head { padding: 14px 18px 10px; border-bottom: 1px solid var(--border); }
+.offline-title { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 4px; }
+.local-row.blocked { opacity: 0.8; }
+.local-row .why { margin-top: 2px; color: #9a6a0a; }
+html[data-theme='dark'] .local-row .why { color: #ffce85; }
+.refund-chip {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 3px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--brand);
+}
+</style>

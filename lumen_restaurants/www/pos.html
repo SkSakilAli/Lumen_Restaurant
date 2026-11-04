@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+{#- Copyright (c) 2026 Lumen Solutions | SPDX-License-Identifier: AGPL-3.0-only | "LumenPOS" is a trademark of Lumen Solutions. See TRADEMARKS.md. #}
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Lumen Restaurants</title>
+  <!-- The Lumen Restaurants logo kit (reference/brand-kit): the favicon is the
+       mini cut in the tile, the files sit in the till's own folder so the
+       offline worker keeps them. -->
+  <link rel="icon" type="image/svg+xml" href="/assets/lumen_restaurants/pos/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/lumen_restaurants/pos/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/lumen_restaurants/pos/favicon-16.png">
+  <link rel="manifest" href="/assets/lumen_restaurants/pos/manifest.json">
+  <meta name="theme-color" content="#1463FF">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Lumen Restaurants">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/lumen_restaurants/pos/app-icon-180.png">
+  <link rel="stylesheet" href="/assets/lumen_restaurants/pos/pos.css?v={{ lumenpos_version }}">
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    window.csrf_token = "{{ csrf_token }}";
+    window.lumenpos_version = "{{ lumenpos_version }}";
+    // Keep the shell on the device so the till opens with no connection at
+    // all, and so a reload during an outage is not the end of the shift.
+    // Registered with the version, a release is a new worker and a new cache.
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker
+          .register("/sw.js?v={{ lumenpos_version }}", { scope: "/pos" })
+          .catch(function () {
+            /* no service worker (old browser, plain http): the till still works online */
+          });
+      });
+    }
+  </script>
+  <script type="module" src="/assets/lumen_restaurants/pos/pos.js?v={{ lumenpos_version }}"></script>
+</body>
+</html>

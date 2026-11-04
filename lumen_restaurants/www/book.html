@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+{#- Copyright (c) 2026 Lumen Solutions | SPDX-License-Identifier: AGPL-3.0-only | "LumenPOS" is a trademark of Lumen Solutions. See TRADEMARKS.md. -#}
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }}</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/svg+xml" href="/assets/lumen_restaurants/images/svg/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/lumen_restaurants/images/png/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/lumen_restaurants/images/png/favicon-16.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link id="font-link" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;700&display=swap">
+  <style>
+    :root {
+      --brand: #1463ff; --on-brand: #fff;
+      --card: #fff; --ink: #101623; --muted: #66707f; --line: #e3e7ee; --soft: #f3f5f9;
+      --head-ink: #101623; --head-muted: #5a6474;
+      --radius: 18px; --radius-sm: 12px;
+      --font: 'IBM Plex Sans Arabic', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body { font-family: var(--font); color: var(--ink); line-height: 1.65; background: #f3f5f9; }
+    #bg { position: fixed; inset: 0; z-index: -1; background-size: cover; background-position: center; }
+    #bg::after { content: ""; position: absolute; inset: 0; background: var(--bg-shade, transparent); }
+    .page { max-width: 520px; margin: 0 auto; padding: 18px 16px 40px; }
+    .topbar { display: flex; justify-content: flex-end; gap: 8px; }
+    .lang { border: 1px solid rgba(127,127,127,.35); background: rgba(255,255,255,.85); color: #222;
+            border-radius: 999px; padding: 5px 14px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+    .preview-bar { background: #fff3cd; color: #7a5a00; border-radius: 10px; padding: 7px 12px; font-size: 12.5px;
+                   text-align: center; margin-bottom: 10px; font-weight: 600; }
+    .head { text-align: center; padding: 8px 0 16px; color: var(--head-ink); }
+    .head img.logo { max-height: 72px; max-width: 220px; margin-bottom: 10px; object-fit: contain; }
+    .head h1 { margin: 0; font-size: 24px; line-height: 1.35; }
+    .head p { margin: 4px 0 0; color: var(--head-muted); font-size: 14px; white-space: pre-line; }
+    .card { background: var(--card); color: var(--ink); border-radius: var(--radius); overflow: hidden;
+            box-shadow: 0 12px 34px rgba(16,22,35,.12); }
+    .cover { height: 150px; background-size: cover; background-position: center; }
+    .body { padding: 18px 16px 20px; }
+    .fl { display: block; font-size: 12.5px; font-weight: 700; color: var(--muted); margin: 18px 0 8px; }
+    .fl:first-child { margin-top: 0; }
+    .fl .req { color: var(--brand); }
+    .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+    .chips::-webkit-scrollbar { display: none; }
+    .chip { flex: none; border: 1.5px solid var(--line); background: var(--card); color: var(--ink); border-radius: var(--radius-sm);
+            padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .chip.on { border-color: var(--brand); background: var(--brand); color: var(--on-brand); }
+    .chip:disabled { opacity: .35; cursor: default; text-decoration: line-through; }
+    .slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; max-height: 188px; overflow: auto;
+             scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+    .slots .chip { text-align: center; padding: 9px 2px; direction: ltr; }
+    .empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
+    .stepper { display: inline-flex; align-items: center; gap: 12px; }
+    .stepper button { width: 42px; height: 42px; border-radius: var(--radius-sm); border: 1.5px solid var(--line); background: var(--card);
+                      color: var(--ink); font-size: 21px; font-weight: 700; cursor: pointer; }
+    .stepper b { font-size: 19px; min-width: 30px; text-align: center; }
+    .stepper.sm button { width: 32px; height: 32px; font-size: 17px; }
+    .stepper.sm b { font-size: 15px; min-width: 22px; }
+    .pkg { display: flex; gap: 12px; align-items: center; border: 1.5px solid var(--line); border-radius: var(--radius-sm);
+           padding: 10px; margin-bottom: 9px; cursor: pointer; background: var(--card); }
+    .pkg.on { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand) inset; }
+    .pkg img { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; flex: none; }
+    .pkg .ph { width: 64px; height: 64px; border-radius: 10px; flex: none; display: grid; place-items: center;
+               font-size: 22px; font-weight: 700; color: var(--brand); background: var(--soft); }
+    .pkg .txt { flex: 1; min-width: 0; }
+    .pkg .txt b { display: block; font-size: 14.5px; }
+    .pkg .txt span { display: block; color: var(--muted); font-size: 12.5px; white-space: pre-line; }
+    .pkg .price { font-weight: 700; color: var(--brand); font-size: 13.5px; white-space: nowrap; }
+    .pkg .tag { font-size: 11px; font-weight: 700; color: var(--brand); }
+    .tick { width: 22px; height: 22px; border-radius: 99px; border: 2px solid var(--line); flex: none; display: grid; place-items: center; }
+    .pkg.on .tick { background: var(--brand); border-color: var(--brand); }
+    .pkg.on .tick::after { content: ""; width: 9px; height: 5px; border: 2px solid var(--on-brand); border-top: 0; border-right: 0;
+                           transform: rotate(-45deg) translate(1px,-1px); }
+    input.ti, textarea.ti, select.ti { width: 100%; border: 1.5px solid var(--line); border-radius: var(--radius-sm); padding: 12px;
+      font: inherit; font-size: 14.5px; background: var(--card); color: var(--ink); outline: none; }
+    input.ti:focus, textarea.ti:focus, select.ti:focus { border-color: var(--brand); }
+    textarea.ti { min-height: 84px; resize: vertical; }
+    .check { display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; }
+    .check input { width: 20px; height: 20px; accent-color: var(--brand); }
+    .ltr { direction: ltr; text-align: start; }
+    .terms { margin-top: 16px; font-size: 12.5px; color: var(--muted); background: var(--soft); border-radius: var(--radius-sm);
+             padding: 10px 12px; white-space: pre-line; }
+    .total { display: flex; justify-content: space-between; margin-top: 16px; font-weight: 700; font-size: 15px; }
+    .total small { display: block; font-weight: 500; color: var(--muted); font-size: 11.5px; }
+    .go { width: 100%; margin-top: 18px; border: 0; border-radius: var(--radius-sm); background: var(--brand); color: var(--on-brand);
+          font: inherit; font-size: 16.5px; font-weight: 700; padding: 15px; cursor: pointer; }
+    .go[disabled] { opacity: .55; cursor: default; }
+    .err { display: none; margin-top: 12px; background: #fdecec; color: #a02525; border-radius: var(--radius-sm); padding: 10px 14px; font-size: 13px; }
+    .done { text-align: center; padding: 26px 18px; }
+    .done .mark { width: 66px; height: 66px; margin: 0 auto 12px; border-radius: 99px; background: var(--brand); display: grid; place-items: center; }
+    .done .mark::after { content: ""; width: 24px; height: 12px; border: 4px solid var(--on-brand); border-top: 0; border-right: 0;
+                         transform: rotate(-45deg) translate(2px,-3px); }
+    .done h2 { margin: 0 0 6px; font-size: 20px; }
+    .done p { margin: 0; color: var(--muted); font-size: 14px; white-space: pre-line; }
+    .done .sum { margin: 16px 0 6px; background: var(--soft); border-radius: var(--radius-sm); padding: 12px; font-size: 14px; font-weight: 600; }
+    .links { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 18px; }
+    .links a { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; background: rgba(255,255,255,.9); color: #1d2533;
+               border: 1px solid rgba(127,127,127,.25); border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 600; }
+    .links a svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .foot { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--head-muted); font-size: 11px; margin-top: 18px; opacity: .8; }
+    .foot img { width: 16px; height: 16px; display: block; }
+    .hp { position: absolute; inset-inline-start: -9999px; opacity: 0; height: 0; }
+    .closed { text-align: center; padding: 34px 16px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div id="bg"></div>
+  <div class="page" id="page"></div>
+
+<script>
+var PAGE = {{ page_json | safe }};
+var AVAILABLE = {{ 1 if available else 0 }};
+var PREVIEW = {{ preview }};
+var OUTLET = {{ outlet | tojson }};
+var CSRF = "{{ csrf_token }}";
+var SITE_NOW = {{ site_now | tojson }};
+
+var FONT_WEIGHTS = { "Lalezar": null };
+var UI = {
+  ar: { day: "التاريخ", today: "اليوم", tomorrow: "غدا", time: "الوقت", guests: "عدد الأشخاص", packages: "اختر من العروض",
+        perGuest: "للشخص", included: "مشمول", name: "الاسم", phone: "رقم الجوال", note: "ملاحظة (اختياري)",
+        send: "إرسال طلب الحجز", confirm: "تأكيد الحجز", sending: "جار الإرسال...", total: "الإجمالي التقديري",
+        payAt: "يدفع في المطعم", full: "ممتلئ", noSlots: "لا أوقات متاحة في هذا اليوم، اختر يوما آخر",
+        passed: "هذا الوقت فات، اختر وقتا لاحقا",
+        doneReq: "استلمنا طلبك", doneReqMsg: "بنتصل عليك قريبا نأكد الحجز. الحجز غير مؤكد حتى نتصل.",
+        doneOk: "تم تأكيد حجزك", doneOkMsg: "بانتظارك في الموعد.", ref: "مرجع الحجز: ", persons: " أشخاص",
+        pickTime: "اختر الوقت", writeName: "اكتب اسمك", writePhone: "اكتب رقم جوال صحيح", required: " مطلوب",
+        preview: "معاينة: هذا النموذج لا يرسل شيئا", closed: "الحجز الإلكتروني غير متاح لهذا الفرع حاليا. اتصل بالمطعم مباشرة.",
+        call: "اتصال", whatsapp: "واتساب", location: "الموقع", website: "الموقع الإلكتروني", yes: "نعم",
+        pick: "اختر...", failed: "تعذر الإرسال، جرب مرة ثانية" },
+  en: { day: "Date", today: "Today", tomorrow: "Tomorrow", time: "Time", guests: "Guests", packages: "Choose a package",
+        perGuest: "per guest", included: "Included", name: "Name", phone: "Mobile number", note: "Note (optional)",
+        send: "Send booking request", confirm: "Confirm booking", sending: "Sending...", total: "Estimated total",
+        payAt: "Paid at the restaurant", full: "Full", noSlots: "No times left on this day, pick another",
+        passed: "That time has passed, pick a later one",
+        doneReq: "Request received", doneReqMsg: "We will call you shortly to confirm. The booking is not final until we call.",
+        doneOk: "Your booking is confirmed", doneOkMsg: "See you then.", ref: "Reference: ", persons: " guests",
+        pickTime: "Pick a time", writeName: "Write your name", writePhone: "Write a valid mobile number", required: " is required",
+        preview: "Preview: this form sends nothing", closed: "Online booking is not available for this branch right now. Please call the restaurant.",
+        call: "Call", whatsapp: "WhatsApp", location: "Location", website: "Website", yes: "Yes",
+        pick: "Pick...", failed: "Could not send, try again" }
+};
+var DAY_KEYS = ["closed_sun", "closed_mon", "closed_tue", "closed_wed", "closed_thu", "closed_fri", "closed_sat"];
+
+var S = { lang: "ar", date: null, time: null, guests: 2, picks: {}, answers: {}, full: [], sent: null };
+
+// ------------------------------------------------------------- helpers
+function h(tag, attrs, kids) {
+  var el = document.createElement(tag);
+  if (attrs) for (var k in attrs) {
+    if (k === "text") el.textContent = attrs[k];
+    else if (k === "cls") el.className = attrs[k];
+    else if (k.slice(0, 2) === "on") el.addEventListener(k.slice(2), attrs[k]);
+    else if (attrs[k] !== null && attrs[k] !== undefined && attrs[k] !== false) el.setAttribute(k, attrs[k]);
+  }
+  (kids || []).forEach(function (c) { if (c) el.appendChild(typeof c === "string" ? document.createTextNode(c) : c) });
+  return el;
+}
+function tx(key) { return UI[S.lang][key] }
+function pick(ar, en) { return S.lang === "en" ? (en || ar || "") : (ar || en || "") }
+function safeUrl(u) {
+  u = String(u || "").trim();
+  if (/^https?:\/\//i.test(u) || /^\/[^\/]/.test(u)) return u;
+  return null;
+}
+function handleUrl(value, base) {
+  var u = String(value || "").trim();
+  if (!u) return null;
+  if (/^https?:\/\//i.test(u)) return u;
+  return base + u.replace(/^@/, "");
+}
+function hex(c, fallback) { return /^#([0-9a-f]{3}){1,2}$/i.test(c || "") ? c : fallback }
+function luminance(c) {
+  c = hex(c, "#ffffff").slice(1);
+  if (c.length === 3) c = c.split("").map(function (x) { return x + x }).join("");
+  var rgb = [0, 2, 4].map(function (i) {
+    var v = parseInt(c.substr(i, 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+}
+function onColour(c) { return luminance(c) > 0.45 ? "#101623" : "#ffffff" }
+function money(v) {
+  var n = Number(v || 0);
+  var text = n.toLocaleString(S.lang === "ar" ? "ar-u-nu-latn" : "en", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
+  return text + " " + (PAGE.currency || "");
+}
+function ymd(d) {
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+function toMin(t) { var p = String(t || "0:0").split(":"); return (+p[0]) * 60 + (+p[1] || 0) }
+function fmt(m) { return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0") }
+// The branch's time, carried as the gap between the server's clock and this
+// device's, so it keeps running while the page stays open. Parsed by hand:
+// some older phones read a bare date and time as UTC.
+var SKEW = (function () {
+  var p = String(SITE_NOW || "").match(/^(\d{4})-(\d\d)-(\d\d)[T ](\d\d):(\d\d):(\d\d)/);
+  if (!p) return 0;
+  return new Date(+p[1], +p[2] - 1, +p[3], +p[4], +p[5], +p[6]).getTime() - Date.now();
+})();
+function siteNow() { return new Date(Date.now() + SKEW) }
+
+// ------------------------------------------------------------- theme
+function applyTheme() {
+  var root = document.documentElement.style;
+  var brand = hex(PAGE.primary_color, "#1463ff");
+  var card = hex(PAGE.card_color, "#ffffff");
+  root.setProperty("--brand", brand);
+  root.setProperty("--on-brand", onColour(brand));
+  root.setProperty("--card", card);
+  var dark = luminance(card) < 0.35;
+  // The browser's own parts (a scroll bar, a list, a tick) follow the card:
+  // on a dark one they showed white on a computer.
+  root.setProperty("color-scheme", dark ? "dark" : "light");
+  root.setProperty("--ink", dark ? "#f2f5fa" : "#101623");
+  root.setProperty("--muted", dark ? "#a9b3c2" : "#66707f");
+  root.setProperty("--line", dark ? "rgba(255,255,255,.16)" : "#e3e7ee");
+  root.setProperty("--soft", dark ? "rgba(255,255,255,.07)" : "#f3f5f9");
+  var r = { Rounded: ["18px", "12px"], Soft: ["10px", "8px"], Sharp: ["3px", "3px"] }[PAGE.corner_style] || ["18px", "12px"];
+  root.setProperty("--radius", r[0]);
+  root.setProperty("--radius-sm", r[1]);
+
+  var bg = document.getElementById("bg");
+  var c1 = hex(PAGE.background_color, "#f3f5f9"), c2 = hex(PAGE.background_color_2, "#dfe7f5");
+  var headBase = c1;
+  bg.style.backgroundImage = "";
+  bg.style.background = "";
+  root.setProperty("--bg-shade", "transparent");
+  if (PAGE.background_type === "Gradient") {
+    bg.style.background = "linear-gradient(160deg," + c1 + "," + c2 + ")";
+  } else if (PAGE.background_type === "Image" && safeUrl(PAGE.background_image)) {
+    bg.style.backgroundColor = c1;
+    bg.style.backgroundImage = "url('" + safeUrl(PAGE.background_image).replace(/'/g, "%27") + "')";
+    root.setProperty("--bg-shade", "rgba(0,0,0,.38)");
+    headBase = "#000000";
+  } else {
+    bg.style.background = c1;
+  }
+  var headInk = onColour(headBase);
+  root.setProperty("--head-ink", headInk);
+  root.setProperty("--head-muted", headInk === "#ffffff" ? "rgba(255,255,255,.82)" : "#5a6474");
+
+  var font = PAGE.font || "IBM Plex Sans Arabic";
+  root.setProperty("--font", "'" + font + "', system-ui, sans-serif");
+  var link = document.getElementById("font-link");
+  var spec = FONT_WEIGHTS.hasOwnProperty(font) ? "" : ":wght@400;700";
+  var href = "https://fonts.googleapis.com/css2?family=" + encodeURIComponent(font).replace(/%20/g, "+") + spec + "&display=swap";
+  if (link.getAttribute("href") !== href) link.setAttribute("href", href);
+}
+
+// ------------------------------------------------------------- days and slots
+function openDays() {
+  var out = [], d = siteNow(), n = Math.max(1, +PAGE.days_ahead || 14);
+  for (var i = 0; i <= n; i++) {
+    var day = new Date(d.getFullYear(), d.getMonth(), d.getDate() + i);
+    if (PAGE[DAY_KEYS[day.getDay()]]) continue;
+    // Late in the evening today has no time left in it: start on the next
+    // open day instead of opening on one that offers nothing.
+    if (i === 0 && !slotsOn(ymd(day)).length) continue;
+    out.push({ value: ymd(day), i: i, date: day });
+  }
+  return out;
+}
+function dayLabel(day) {
+  if (day.i === 0) return tx("today");
+  if (day.i === 1) return tx("tomorrow");
+  return day.date.toLocaleDateString(S.lang === "ar" ? "ar-u-ca-gregory-nu-latn" : "en-GB", { weekday: "short", day: "numeric", month: "short" });
+}
+function slotsOn(date) {
+  var start = toMin(PAGE.open_time || "12:00"), end = toMin(PAGE.close_time || "23:30"), step = Math.max(10, +PAGE.slot_minutes || 30);
+  var list = [];
+  var now = siteNow(), cut = -1;
+  if (date === ymd(now)) cut = now.getHours() * 60 + now.getMinutes() + 15;
+  for (var m = start; m <= end; m += step) if (m > cut) list.push(fmt(m));
+  return list;
+}
+function slots() { return slotsOn(S.date) }
+function loadFull() {
+  S.full = [];
+  if (PREVIEW || !(+PAGE.slot_capacity) || !S.date) return render();
+  fetch("/api/method/lumen_restaurants.api.reservations.availability?" + new URLSearchParams({ pos_profile: OUTLET, date: S.date, guests: S.guests }), { headers: { Accept: "application/json" } })
+    .then(function (r) { return r.json() })
+    .then(function (j) { S.full = (j.message && j.message.full) || []; if (S.full.indexOf(S.time) >= 0) S.time = null; render() })
+    .catch(function () { render() });
+}
+
+// ------------------------------------------------------------- packages
+function pkgQty(item) {
+  if (item.pricing === "Per guest") return (S.picks[item.item_code] || item.required) ? S.guests : 0;
+  var q = S.picks[item.item_code] || 0;
+  return item.required ? Math.max(q, 1) : q;
+}
+function estimate() {
+  return (PAGE.items || []).reduce(function (sum, it) { return sum + pkgQty(it) * ((PAGE.rates || {})[it.item_code] || 0) }, 0);
+}
+
+// ------------------------------------------------------------- render
+function render() {
+  document.documentElement.lang = S.lang;
+  document.documentElement.dir = S.lang === "ar" ? "rtl" : "ltr";
+  applyTheme();
+  var root = document.getElementById("page");
+  root.innerHTML = "";
+
+  root.appendChild(h("div", { cls: "topbar" }, [
+    h("button", { cls: "lang", type: "button", text: S.lang === "ar" ? "English" : "العربية",
+      onclick: function () { S.lang = S.lang === "ar" ? "en" : "ar"; render() } })
+  ]));
+  if (PREVIEW) root.appendChild(h("div", { cls: "preview-bar", text: tx("preview") }));
+
+  var logo = safeUrl(PAGE.logo);
+  var title = pick(PAGE.title, PAGE.title_en) || PAGE.company || "";
+  root.appendChild(h("div", { cls: "head" }, [
+    logo ? h("img", { cls: "logo", src: logo, alt: "" }) : null,
+    h("h1", { text: title }),
+    pick(PAGE.subtitle, PAGE.subtitle_en) ? h("p", { text: pick(PAGE.subtitle, PAGE.subtitle_en) }) : null
+  ]));
+
+  var card = h("div", { cls: "card" });
+  root.appendChild(card);
+  if (!AVAILABLE) {
+    card.appendChild(h("div", { cls: "closed", text: tx("closed") }));
+    root.appendChild(links());
+    return;
+  }
+  var cover = safeUrl(PAGE.cover_image);
+  if (cover) card.appendChild(h("div", { cls: "cover", style: "background-image:url('" + cover.replace(/'/g, "%27") + "')" }));
+
+  if (S.sent) { card.appendChild(doneView()); root.appendChild(links()); return }
+
+  var body = h("div", { cls: "body" });
+  card.appendChild(body);
+  var days = openDays();
+  if (!S.date || !days.some(function (d) { return d.value === S.date })) S.date = days.length ? days[0].value : null;
+
+  body.appendChild(h("label", { cls: "fl", text: tx("day") }));
+  body.appendChild(h("div", { cls: "chips" }, days.map(function (d) {
+    return h("button", { type: "button", cls: "chip" + (S.date === d.value ? " on" : ""), text: dayLabel(d),
+      onclick: function () { S.date = d.value; S.time = null; loadFull() } });
+  })));
+
+  body.appendChild(h("label", { cls: "fl", text: tx("time") }));
+  var list = slots();
+  if (!list.length) body.appendChild(h("div", { cls: "empty", text: tx("noSlots") }));
+  else body.appendChild(h("div", { cls: "slots" }, list.map(function (t) {
+    var full = S.full.indexOf(t) >= 0;
+    return h("button", { type: "button", cls: "chip" + (S.time === t ? " on" : ""), text: full ? t : t, disabled: full,
+      title: full ? tx("full") : null, onclick: function () { S.time = t; render() } });
+  })));
+
+  var minG = Math.max(1, +PAGE.min_guests || 1), maxG = Math.max(minG, +PAGE.max_guests || 12);
+  S.guests = Math.min(Math.max(S.guests, minG), maxG);
+  body.appendChild(h("label", { cls: "fl", text: tx("guests") }));
+  body.appendChild(h("div", { cls: "stepper" }, [
+    h("button", { type: "button", text: "-", onclick: function () { S.guests = Math.max(minG, S.guests - 1); loadFull() } }),
+    h("b", { text: String(S.guests) }),
+    h("button", { type: "button", text: "+", onclick: function () { S.guests = Math.min(maxG, S.guests + 1); loadFull() } })
+  ]));
+
+  var items = PAGE.items || [];
+  if (items.length) {
+    body.appendChild(h("label", { cls: "fl", text: tx("packages") }));
+    items.forEach(function (it) {
+      var qty = pkgQty(it), on = qty > 0;
+      var rate = (PAGE.rates || {})[it.item_code] || 0;
+      var img = safeUrl(it.image) || safeUrl((PAGE.item_images || {})[it.item_code]);
+      var name = pick(it.title, it.title_en) || (PAGE.item_names || {})[it.item_code] || it.item_code;
+      var priceText = rate ? money(rate) + (it.pricing === "Per guest" ? " " + tx("perGuest") : "") : "";
+      var right;
+      if (it.pricing !== "Per guest" && on) {
+        right = h("div", { cls: "stepper sm", onclick: function (e) { e.stopPropagation() } }, [
+          h("button", { type: "button", text: "-", onclick: function () { S.picks[it.item_code] = Math.max(it.required ? 1 : 0, qty - 1); render() } }),
+          h("b", { text: String(qty) }),
+          h("button", { type: "button", text: "+", onclick: function () { S.picks[it.item_code] = Math.min(+it.max_qty || 10, qty + 1); render() } })
+        ]);
+      } else {
+        right = h("span", { cls: "tick" });
+      }
+      body.appendChild(h("div", { cls: "pkg" + (on ? " on" : ""), onclick: function () {
+        if (it.required) return;
+        S.picks[it.item_code] = on ? 0 : 1; render();
+      } }, [
+        img ? h("img", { src: img, alt: "" }) : h("div", { cls: "ph", text: name.trim().charAt(0) }),
+        h("div", { cls: "txt" }, [
+          h("b", { text: name }),
+          pick(it.description, it.description_en) ? h("span", { text: pick(it.description, it.description_en) }) : null,
+          priceText ? h("div", { cls: "price", text: priceText }) : null,
+          it.required ? h("div", { cls: "tag", text: tx("included") }) : null
+        ]),
+        right
+      ]));
+    });
+  }
+
+  (PAGE.fields || []).forEach(function (f) {
+    var label = pick(f.label, f.label_en);
+    var lab = h("label", { cls: "fl" }, [label, f.required ? h("span", { cls: "req", text: " *" }) : null]);
+    var val = S.answers[f.key] == null ? "" : S.answers[f.key];
+    var set = function (e) { S.answers[f.key] = f.fieldtype === "Check" ? (e.target.checked ? 1 : 0) : e.target.value };
+    if (f.fieldtype === "Check") {
+      body.appendChild(h("label", { cls: "fl check" }, [
+        h("input", { type: "checkbox", checked: val ? "checked" : null, onchange: set }), label,
+        f.required ? h("span", { cls: "req", text: " *" }) : null
+      ]));
+      return;
+    }
+    body.appendChild(lab);
+    if (f.fieldtype === "Select") {
+      var opts = String(f.options || "").split("\n").filter(Boolean).map(function (line) {
+        var parts = line.split("|"); return { value: parts[0].trim(), label: pick(parts[0].trim(), (parts[1] || "").trim()) };
+      });
+      var sel = h("select", { cls: "ti", onchange: set }, [h("option", { value: "", text: tx("pick") })].concat(opts.map(function (o) {
+        return h("option", { value: o.value, text: o.label, selected: o.value === val ? "selected" : null });
+      })));
+      body.appendChild(sel);
+    } else if (f.fieldtype === "Long Text") {
+      var ta = h("textarea", { cls: "ti", placeholder: f.placeholder || null, oninput: set });
+      ta.value = val; body.appendChild(ta);
+    } else {
+      var inp = h("input", { cls: "ti" + (f.fieldtype === "Number" ? " ltr" : ""), placeholder: f.placeholder || null, oninput: set,
+        type: f.fieldtype === "Number" ? "number" : f.fieldtype === "Date" ? "date" : "text" });
+      inp.value = val; body.appendChild(inp);
+    }
+  });
+
+  body.appendChild(h("label", { cls: "fl" }, [tx("name"), h("span", { cls: "req", text: " *" })]));
+  var nameIn = h("input", { cls: "ti", id: "name", autocomplete: "name", oninput: function (e) { S.name = e.target.value } });
+  nameIn.value = S.name || ""; body.appendChild(nameIn);
+  body.appendChild(h("label", { cls: "fl" }, [tx("phone"), h("span", { cls: "req", text: " *" })]));
+  var phoneIn = h("input", { cls: "ti ltr", id: "phone", type: "tel", placeholder: "05xxxxxxxx", autocomplete: "tel",
+    oninput: function (e) { S.phone = e.target.value } });
+  phoneIn.value = S.phone || ""; body.appendChild(phoneIn);
+  if (+PAGE.show_note) {
+    body.appendChild(h("label", { cls: "fl", text: pick(PAGE.note_label, PAGE.note_label_en) || tx("note") }));
+    var noteIn = h("input", { cls: "ti", oninput: function (e) { S.note = e.target.value } });
+    noteIn.value = S.note || ""; body.appendChild(noteIn);
+  }
+  body.appendChild(h("input", { cls: "hp", id: "website", tabindex: "-1", autocomplete: "off" }));
+
+  var est = estimate();
+  if (est > 0) body.appendChild(h("div", { cls: "total" }, [
+    h("div", {}, [tx("total"), h("small", { text: tx("payAt") })]), h("div", { text: money(est) })
+  ]));
+  if (pick(PAGE.terms, PAGE.terms_en)) body.appendChild(h("div", { cls: "terms", text: pick(PAGE.terms, PAGE.terms_en) }));
+
+  var go = h("button", { cls: "go", type: "button", text: +PAGE.auto_confirm ? tx("confirm") : tx("send"), onclick: submit });
+  body.appendChild(go);
+  body.appendChild(h("div", { cls: "err", id: "err" }));
+  root.appendChild(links());
+}
+
+function doneView() {
+  var ok = S.sent.status === "Confirmed";
+  var day = openDays().filter(function (d) { return d.value === S.sent.date })[0];
+  var custom = pick(PAGE.success_message, PAGE.success_message_en);
+  return h("div", { cls: "done" }, [
+    h("div", { cls: "mark" }),
+    h("h2", { text: ok ? tx("doneOk") : tx("doneReq") }),
+    h("p", { text: custom || (ok ? tx("doneOkMsg") : tx("doneReqMsg")) }),
+    h("div", { cls: "sum", text: (day ? dayLabel(day) : S.sent.date) + " · " + S.sent.time + " · " + S.sent.guests + tx("persons") }),
+    h("p", { style: "font-size:12px", text: tx("ref") + S.sent.ref })
+  ]);
+}
+
+var ICONS = {
+  call: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
+  chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-5A8 8 0 1 1 21 12z"/>',
+  pin: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  at: '<circle cx="12" cy="12" r="4"/><path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-4 7.5"/>'
+};
+function linkBtn(href, icon, label) {
+  if (!href) return null;
+  var a = h("a", { href: href, target: "_blank", rel: "noopener" });
+  var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.innerHTML = ICONS[icon];
+  a.appendChild(svg);
+  a.appendChild(document.createTextNode(label));
+  return a;
+}
+function links() {
+  var digits = function (v) { return String(v || "").replace(/[^\d+]/g, "") };
+  var wa = digits(PAGE.whatsapp).replace(/^\+/, "").replace(/^0/, "966");
+  var box = h("div", { cls: "links" }, [
+    PAGE.contact_phone ? linkBtn("tel:" + digits(PAGE.contact_phone), "call", tx("call")) : null,
+    wa ? linkBtn("https://wa.me/" + wa, "chat", tx("whatsapp")) : null,
+    safeUrl(PAGE.maps_url) ? linkBtn(safeUrl(PAGE.maps_url), "pin", tx("location")) : null,
+    safeUrl(PAGE.website) ? linkBtn(safeUrl(PAGE.website), "globe", tx("website")) : null,
+    linkBtn(handleUrl(PAGE.instagram, "https://instagram.com/"), "at", "Instagram"),
+    linkBtn(handleUrl(PAGE.snapchat, "https://snapchat.com/add/"), "at", "Snapchat"),
+    linkBtn(handleUrl(PAGE.tiktok, "https://tiktok.com/@"), "at", "TikTok"),
+    linkBtn(handleUrl(PAGE.x_url, "https://x.com/"), "at", "X")
+  ]);
+  // The credit carries the Lumen Restaurants mark, the favicon's tile with the
+  // mini cut, which is the kit's cut below 28 px. The header stays the
+  // restaurant's own (its logo and name).
+  var mark = h("img", { src: "/assets/lumen_restaurants/images/svg/favicon.svg", alt: "" });
+  var wrap = h("div", {}, [box, h("div", { cls: "foot" }, [mark, "Lumen Restaurants"])]);
+  return wrap;
+}
+
+// ------------------------------------------------------------- submit
+function fail(message) {
+  var err = document.getElementById("err");
+  if (!err) return;
+  err.textContent = message;
+  err.style.display = "block";
+}
+function serverMessage(payload) {
+  try {
+    var raw = JSON.parse(payload._server_messages)[0];
+    return JSON.parse(raw).message.replace(/<[^>]*>/g, "");
+  } catch (e) {
+    return tx("failed");
+  }
+}
+function submit() {
+  if (PREVIEW) return fail(tx("preview"));
+  if (!S.time) return fail(tx("pickTime"));
+  if (!openDays().some(function (d) { return d.value === S.date }) || slots().indexOf(S.time) < 0) {
+    // The page sat open past the chosen time (or day): show what is left instead.
+    S.time = null;
+    render();
+    return fail(tx("passed"));
+  }
+  if (String(S.name || "").trim().length < 2) return fail(tx("writeName"));
+  if (String(S.phone || "").replace(/\D/g, "").length < 9) return fail(tx("writePhone"));
+  var missing = (PAGE.fields || []).filter(function (f) { return f.required && !S.answers[f.key] })[0];
+  if (missing) return fail(pick(missing.label, missing.label_en) + tx("required"));
+  var items = (PAGE.items || []).map(function (it) { return { item_code: it.item_code, qty: pkgQty(it) } }).filter(function (x) { return x.qty > 0 });
+  var go = document.querySelector(".go");
+  go.disabled = true;
+  go.textContent = tx("sending");
+  fetch("/api/method/lumen_restaurants.api.reservations.book_online", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Frappe-CSRF-Token": CSRF, Accept: "application/json" },
+    body: JSON.stringify({
+      pos_profile: OUTLET, customer_name: String(S.name).trim(), phone: String(S.phone).trim(),
+      reservation_date: S.date, reservation_time: S.time, guests: S.guests, note: String(S.note || "").trim(),
+      website: (document.getElementById("website") || {}).value || "", answers: S.answers, items: items
+    })
+  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j } }) })
+    .then(function (res) {
+      if (!res.ok) throw new Error(serverMessage(res.j));
+      var m = res.j.message || {};
+      S.sent = { ref: m.ref || "", status: m.status || "Requested", date: S.date, time: S.time, guests: S.guests };
+      render();
+      window.scrollTo({ top: 0 });
+    })
+    .catch(function (e) {
+      go.disabled = false;
+      go.textContent = +PAGE.auto_confirm ? tx("confirm") : tx("send");
+      fail(String(e && e.message || e));
+    });
+}
+
+// ------------------------------------------------------------- live preview
+// The designer in the till posts its unsaved draft here and the page redraws
+// itself from it. Only a same-origin parent is listened to, and only while the
+// page was opened as a preview.
+if (PREVIEW) {
+  window.addEventListener("message", function (event) {
+    if (event.origin !== window.location.origin) return;
+    var data = event.data || {};
+    if (data.type !== "lumenpos-booking-preview" || !data.page) return;
+    PAGE = data.page;
+    if (data.lang && data.lang !== S.lang) S.lang = data.lang;
+    render();
+  });
+}
+
+render();
+if (+PAGE.slot_capacity) loadFull();
+</script>
+</body>
+</html>

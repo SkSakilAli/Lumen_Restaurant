@@ -1,0 +1,470 @@
+{
+ "actions": [],
+ "creation": "2026-09-24 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "pos_profile",
+  "published",
+  "column_break_head",
+  "auto_confirm",
+  "section_brand",
+  "title",
+  "title_en",
+  "subtitle",
+  "subtitle_en",
+  "column_break_brand",
+  "logo",
+  "cover_image",
+  "section_look",
+  "font",
+  "primary_color",
+  "card_color",
+  "corner_style",
+  "column_break_look",
+  "background_type",
+  "background_color",
+  "background_color_2",
+  "background_image",
+  "section_rules",
+  "open_time",
+  "close_time",
+  "slot_minutes",
+  "days_ahead",
+  "column_break_rules",
+  "min_guests",
+  "max_guests",
+  "slot_capacity",
+  "section_closed",
+  "closed_sun",
+  "closed_mon",
+  "closed_tue",
+  "closed_wed",
+  "column_break_closed",
+  "closed_thu",
+  "closed_fri",
+  "closed_sat",
+  "section_form",
+  "show_note",
+  "note_label",
+  "note_label_en",
+  "fields",
+  "section_items",
+  "items",
+  "section_texts",
+  "terms",
+  "terms_en",
+  "column_break_texts",
+  "success_message",
+  "success_message_en",
+  "section_contact",
+  "contact_phone",
+  "whatsapp",
+  "maps_url",
+  "website",
+  "column_break_contact",
+  "instagram",
+  "snapchat",
+  "tiktok",
+  "x_url"
+ ],
+ "fields": [
+  {
+   "fieldname": "pos_profile",
+   "fieldtype": "Link",
+   "label": "POS Profile",
+   "options": "POS Profile",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "published",
+   "fieldtype": "Check",
+   "label": "Published",
+   "default": "0",
+   "in_list_view": 1,
+   "description": "Off: the link answers \"not available\" and nobody can book. The designer preview still works."
+  },
+  {
+   "fieldname": "column_break_head",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "auto_confirm",
+   "fieldtype": "Check",
+   "label": "Confirm online bookings automatically",
+   "default": "0",
+   "description": "On: a booking is confirmed the moment it arrives, while the time slot still has room. Off: staff confirm each one on the Bookings screen."
+  },
+  {
+   "fieldname": "section_brand",
+   "fieldtype": "Section Break",
+   "label": "Brand"
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title (Arabic)"
+  },
+  {
+   "fieldname": "title_en",
+   "fieldtype": "Data",
+   "label": "Title (English)"
+  },
+  {
+   "fieldname": "subtitle",
+   "fieldtype": "Small Text",
+   "label": "Welcome line (Arabic)"
+  },
+  {
+   "fieldname": "subtitle_en",
+   "fieldtype": "Small Text",
+   "label": "Welcome line (English)"
+  },
+  {
+   "fieldname": "column_break_brand",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "logo",
+   "fieldtype": "Attach Image",
+   "label": "Logo"
+  },
+  {
+   "fieldname": "cover_image",
+   "fieldtype": "Attach Image",
+   "label": "Cover image"
+  },
+  {
+   "fieldname": "section_look",
+   "fieldtype": "Section Break",
+   "label": "Look"
+  },
+  {
+   "fieldname": "font",
+   "fieldtype": "Select",
+   "label": "Font",
+   "options": "IBM Plex Sans Arabic\nTajawal\nCairo\nAlmarai\nNoto Kufi Arabic\nReadex Pro\nEl Messiri\nChanga\nReem Kufi\nAmiri\nNoto Naskh Arabic\nLalezar",
+   "default": "IBM Plex Sans Arabic"
+  },
+  {
+   "fieldname": "primary_color",
+   "fieldtype": "Color",
+   "label": "Main colour",
+   "default": "#1463ff"
+  },
+  {
+   "fieldname": "card_color",
+   "fieldtype": "Color",
+   "label": "Form background",
+   "default": "#ffffff"
+  },
+  {
+   "fieldname": "corner_style",
+   "fieldtype": "Select",
+   "label": "Corners",
+   "options": "Rounded\nSoft\nSharp",
+   "default": "Rounded"
+  },
+  {
+   "fieldname": "column_break_look",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "background_type",
+   "fieldtype": "Select",
+   "label": "Page background",
+   "options": "Solid\nGradient\nImage",
+   "default": "Solid"
+  },
+  {
+   "fieldname": "background_color",
+   "fieldtype": "Color",
+   "label": "Background colour",
+   "default": "#f3f5f9"
+  },
+  {
+   "fieldname": "background_color_2",
+   "fieldtype": "Color",
+   "label": "Second gradient colour",
+   "default": "#dfe7f5",
+   "depends_on": "eval:doc.background_type=='Gradient'"
+  },
+  {
+   "fieldname": "background_image",
+   "fieldtype": "Attach Image",
+   "label": "Background image",
+   "depends_on": "eval:doc.background_type=='Image'"
+  },
+  {
+   "fieldname": "section_rules",
+   "fieldtype": "Section Break",
+   "label": "Booking rules"
+  },
+  {
+   "fieldname": "open_time",
+   "fieldtype": "Time",
+   "label": "Bookings from",
+   "default": "12:00:00"
+  },
+  {
+   "fieldname": "close_time",
+   "fieldtype": "Time",
+   "label": "Bookings until",
+   "default": "23:30:00"
+  },
+  {
+   "fieldname": "slot_minutes",
+   "fieldtype": "Int",
+   "label": "Time slot (minutes)",
+   "default": "30"
+  },
+  {
+   "fieldname": "days_ahead",
+   "fieldtype": "Int",
+   "label": "How many days ahead",
+   "default": "14"
+  },
+  {
+   "fieldname": "column_break_rules",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "min_guests",
+   "fieldtype": "Int",
+   "label": "Smallest party",
+   "default": "1"
+  },
+  {
+   "fieldname": "max_guests",
+   "fieldtype": "Int",
+   "label": "Largest party online",
+   "default": "12",
+   "description": "Bigger parties are asked to call."
+  },
+  {
+   "fieldname": "slot_capacity",
+   "fieldtype": "Int",
+   "label": "Most guests per time slot",
+   "default": "0",
+   "description": "0 = no limit. A full slot is greyed out on the page."
+  },
+  {
+   "fieldname": "section_closed",
+   "fieldtype": "Section Break",
+   "label": "Closed days",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "closed_sun",
+   "fieldtype": "Check",
+   "label": "Closed on Sunday",
+   "default": "0"
+  },
+  {
+   "fieldname": "closed_mon",
+   "fieldtype": "Check",
+   "label": "Closed on Monday",
+   "default": "0"
+  },
+  {
+   "fieldname": "closed_tue",
+   "fieldtype": "Check",
+   "label": "Closed on Tuesday",
+   "default": "0"
+  },
+  {
+   "fieldname": "closed_wed",
+   "fieldtype": "Check",
+   "label": "Closed on Wednesday",
+   "default": "0"
+  },
+  {
+   "fieldname": "column_break_closed",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "closed_thu",
+   "fieldtype": "Check",
+   "label": "Closed on Thursday",
+   "default": "0"
+  },
+  {
+   "fieldname": "closed_fri",
+   "fieldtype": "Check",
+   "label": "Closed on Friday",
+   "default": "0"
+  },
+  {
+   "fieldname": "closed_sat",
+   "fieldtype": "Check",
+   "label": "Closed on Saturday",
+   "default": "0"
+  },
+  {
+   "fieldname": "section_form",
+   "fieldtype": "Section Break",
+   "label": "Form"
+  },
+  {
+   "fieldname": "show_note",
+   "fieldtype": "Check",
+   "label": "Ask for a note",
+   "default": "1"
+  },
+  {
+   "fieldname": "note_label",
+   "fieldtype": "Data",
+   "label": "Note label (Arabic)"
+  },
+  {
+   "fieldname": "note_label_en",
+   "fieldtype": "Data",
+   "label": "Note label (English)"
+  },
+  {
+   "fieldname": "fields",
+   "fieldtype": "Table",
+   "label": "Extra fields",
+   "options": "POS Booking Page Field"
+  },
+  {
+   "fieldname": "section_items",
+   "fieldtype": "Section Break",
+   "label": "Packages and products"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Packages",
+   "options": "POS Booking Page Item",
+   "description": "Things the customer can choose with the booking, a buffet, a set menu, a cake. Priced from the outlet price list."
+  },
+  {
+   "fieldname": "section_texts",
+   "fieldtype": "Section Break",
+   "label": "Texts",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "terms",
+   "fieldtype": "Small Text",
+   "label": "Terms shown above the button (Arabic)"
+  },
+  {
+   "fieldname": "terms_en",
+   "fieldtype": "Small Text",
+   "label": "Terms (English)"
+  },
+  {
+   "fieldname": "column_break_texts",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "success_message",
+   "fieldtype": "Small Text",
+   "label": "After booking (Arabic)"
+  },
+  {
+   "fieldname": "success_message_en",
+   "fieldtype": "Small Text",
+   "label": "After booking (English)"
+  },
+  {
+   "fieldname": "section_contact",
+   "fieldtype": "Section Break",
+   "label": "Contact and social",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "contact_phone",
+   "fieldtype": "Data",
+   "label": "Phone"
+  },
+  {
+   "fieldname": "whatsapp",
+   "fieldtype": "Data",
+   "label": "WhatsApp number"
+  },
+  {
+   "fieldname": "maps_url",
+   "fieldtype": "Data",
+   "label": "Location link"
+  },
+  {
+   "fieldname": "website",
+   "fieldtype": "Data",
+   "label": "Website"
+  },
+  {
+   "fieldname": "column_break_contact",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "instagram",
+   "fieldtype": "Data",
+   "label": "Instagram"
+  },
+  {
+   "fieldname": "snapchat",
+   "fieldtype": "Data",
+   "label": "Snapchat"
+  },
+  {
+   "fieldname": "tiktok",
+   "fieldtype": "Data",
+   "label": "TikTok"
+  },
+  {
+   "fieldname": "x_url",
+   "fieldtype": "Data",
+   "label": "X"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Lumen Restaurants",
+ "name": "POS Booking Page",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "LumenPOS Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "LumenPOS Cashier"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "autoname": "field:pos_profile",
+ "naming_rule": "By fieldname"
+}

@@ -1,0 +1,276 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-09-23 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "pos_profile",
+  "company",
+  "table",
+  "table_label",
+  "column_break_head",
+  "status",
+  "order_type",
+  "guests",
+  "customer",
+  "customer_name",
+  "section_items",
+  "items",
+  "total",
+  "section_billing",
+  "invoices",
+  "column_break_billing",
+  "app_type",
+  "order_id",
+  "section_trail",
+  "opened_by",
+  "opened_at",
+  "closed_at",
+  "bill_printed_at",
+  "column_break_trail",
+  "note",
+  "cancel_reason",
+  "merged_into",
+  "section_cart",
+  "cart"
+ ],
+ "fields": [
+  {
+   "default": "ORD-.YYYY.-",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "ORD-.YYYY.-",
+   "reqd": 1
+  },
+  {
+   "fieldname": "pos_profile",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "POS Profile",
+   "options": "POS Profile",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "read_only": 1
+  },
+  {
+   "fieldname": "table",
+   "fieldtype": "Link",
+   "label": "Table",
+   "options": "POS Restaurant Table"
+  },
+  {
+   "fieldname": "table_label",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Table",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_head",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Open",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Open\nClosed\nCancelled\nMerged",
+   "read_only": 1
+  },
+  {
+   "default": "Dine in",
+   "fieldname": "order_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Order Type",
+   "options": "Dine in\nTakeaway\nDelivery"
+  },
+  {
+   "fieldname": "guests",
+   "fieldtype": "Int",
+   "label": "Guests"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "Customer Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_items",
+   "fieldtype": "Section Break",
+   "label": "Order"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "POS Restaurant Order Item",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Total",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_billing",
+   "fieldtype": "Section Break",
+   "label": "Billing"
+  },
+  {
+   "fieldname": "invoices",
+   "fieldtype": "Table",
+   "label": "Invoices",
+   "options": "POS Restaurant Order Invoice",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_billing",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "The delivery partner this order came from, when it did.",
+   "fieldname": "app_type",
+   "fieldtype": "Data",
+   "label": "Delivery App"
+  },
+  {
+   "fieldname": "order_id",
+   "fieldtype": "Data",
+   "label": "Partner Order No"
+  },
+  {
+   "fieldname": "section_trail",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "opened_by",
+   "fieldtype": "Link",
+   "label": "Opened By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "opened_at",
+   "fieldtype": "Datetime",
+   "label": "Opened At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "closed_at",
+   "fieldtype": "Datetime",
+   "label": "Closed At",
+   "read_only": 1
+  },
+  {
+   "description": "When the bill was printed at the till. The table shows as waiting to pay until it is paid or its order changes.",
+   "fieldname": "bill_printed_at",
+   "fieldtype": "Datetime",
+   "label": "Bill printed at",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_trail",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "note",
+   "fieldtype": "Small Text",
+   "label": "Note"
+  },
+  {
+   "fieldname": "cancel_reason",
+   "fieldtype": "Small Text",
+   "label": "Cancel Reason",
+   "read_only": 1
+  },
+  {
+   "description": "Where this order was poured into, when two tables were joined.",
+   "fieldname": "merged_into",
+   "fieldtype": "Link",
+   "label": "Merged Into",
+   "options": "POS Restaurant Order",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_cart",
+   "fieldtype": "Section Break",
+   "label": "Cart"
+  },
+  {
+   "description": "Snapshot of the till cart as JSON, so any device reopens the order exactly as it was left.",
+   "fieldname": "cart",
+   "fieldtype": "Long Text",
+   "label": "Cart JSON",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-01 18:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Lumen Restaurants",
+ "name": "POS Restaurant Order",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "LumenPOS Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "LumenPOS Cashier",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

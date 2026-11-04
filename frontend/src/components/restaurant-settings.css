@@ -1,0 +1,29 @@
+/* Copyright (c) 2026 Lumen Solutions
+   SPDX-License-Identifier: AGPL-3.0-only
+   Lumen Restaurants: the switch cards of our own components in Settings,
+   General, Restaurant (AddonSettings.vue, FloorSettings.vue), in the look of
+   the Settings screen's own cards. Its styles are scoped to SettingsView.vue
+   and never reached these two (the add-on switches showed bare checkboxes
+   with their texts run together until 0.1.0-r14). */
+.lr-settings .sub-label {
+  font-size: 12.25px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin: 16px 0 8px;
+}
+.lr-settings .hint-row { font-size: 13px; line-height: 1.55; margin: 10px 0; }
+.lr-settings .setting-list { display: flex; flex-direction: column; }
+.lr-settings .setting-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 15px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+}
+.lr-settings .setting-row:first-child { padding-top: 0; }
+.lr-settings .setting-row:last-child { border-bottom: none; padding-bottom: 0; }
+.lr-settings .setting-toggle { margin-top: 2px; width: 17px; height: 17px; flex-shrink: 0; cursor: pointer; }
+.lr-settings .setting-text { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.lr-settings .setting-title { font-weight: 600; font-size: 13.5px; color: var(--text); }
+.lr-settings .setting-desc { font-size: 12.75px; color: var(--text-muted); line-height: 1.55; }

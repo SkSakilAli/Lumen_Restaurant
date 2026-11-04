@@ -1,0 +1,332 @@
+# Copyright (c) 2026 Lumen Solutions
+# SPDX-License-Identifier: AGPL-3.0-only
+# "LumenPOS" is a trademark of Lumen Solutions. See TRADEMARKS.md.
+"""ESC/POS receipt printing for network thermal printers (RAW TCP port 9100).
+
+No third-party dependencies: the byte stream is built by hand. Works with the
+vast majority of Epson-compatible thermal printers. The printer is configured
+per POS Profile via the custom fields `lumenpos_printer_ip` / `lumenpos_printer_port`
+(created by lumen_restaurants.install). If no printer is configured the client falls back
+to browser printing.
+
+Note: the *bench server* opens the socket, so the printer must be reachable
+from where Frappe runs. On cloud-hosted sites use the browser-print fallback.
+"""
+
+from __future__ import annotations
+
+import socket
+
+import frappe
+from frappe import _
+from frappe.utils import cint, flt
+
+from lumen_restaurants import receipt_images
+from lumen_restaurants.api.sales import get_receipt
+
+ESC = b"\x1b"
+GS = b"\x1d"
+
+INIT = ESC + b"@"
+ALIGN_LEFT = ESC + b"a\x00"
+ALIGN_CENTER = ESC + b"a\x01"
+BOLD_ON = ESC + b"E\x01"
+BOLD_OFF = ESC + b"E\x00"
+DOUBLE_SIZE = GS + b"!\x11"
+NORMAL_SIZE = GS + b"!\x00"
+FEED_CUT = b"\n\n\n\n" + GS + b"V\x42\x00"
+KICK_DRAWER = ESC + b"p\x00\x19\xfa"
+
+WIDTH = 42  # characters per line on a typical 80mm printer
+
+
+@frappe.whitelist()
+def print_receipt(invoice: str, open_drawer: int | bool | str = 0, reprint: int | bool | str = 0):
+    from lumen_restaurants.api import permissions
+
+    # A cashier always prints the receipt for the sale they just made. Printing
+    # one AGAIN later (and with it, opening the drawer) is the thing a shop may
+    # want to keep to a supervisor, so only that is gated.
+    if cint(reprint) and not permissions.can_reprint():
+        frappe.throw(_("You are not allowed to reprint a receipt"), frappe.PermissionError)
+    if cint(reprint):
+        _log_reprint(invoice, _("{0} printed again on the receipt printer"))
+    receipt = get_receipt(invoice)
+    # A Sales Invoice outlet prints too: the sale's own doctype, not POS
+    # Invoice only (it found no outlet and refused every such receipt).
+    from lumen_restaurants.api.sales import _doctype_of
+
+    profile = frappe.db.get_value(_doctype_of(invoice), invoice, "pos_profile")
+    ip = frappe.db.get_value("POS Profile", profile, "lumenpos_printer_ip")
+    port = frappe.db.get_value("POS Profile", profile, "lumenpos_printer_port") or 9100
+    if not ip:
+        frappe.throw(_("No receipt printer configured on POS Profile {0}").format(profile))
+
+    data = build_receipt_bytes(receipt, open_drawer=int(open_drawer))
+    _send(ip, int(port), data)
+    return {"printed": True}
+
+
+@frappe.whitelist()
+def allow_reprint(invoice: str):
+    """A receipt printed again from the browser or ERPNext's print view: the
+    same rule as on the receipt printer, asked by the till BEFORE it prints,
+    and written to the audit log (0.60.0). Until then only a network printer's
+    reprint was checked, and a refused one fell back to the browser, so in
+    practice anyone could print a receipt again. Asked by a shop in Nigeria
+    (2026-10-03): after the cashier's first print, copies only by a
+    supervisor."""
+    from lumen_restaurants.api import permissions
+    from lumen_restaurants.api.sales import _doctype_of
+
+    if not permissions.can_reprint():
+        frappe.throw(_("You are not allowed to reprint a receipt"), frappe.PermissionError)
+    frappe.get_doc(_doctype_of(invoice), invoice).check_permission("read")
+    _log_reprint(invoice, _("{0} printed again in the browser"))
+    return {"allowed": 1}
+
+
+def _log_reprint(invoice, message):
+    from lumen_restaurants.api import audit
+    from lumen_restaurants.api.sales import _doctype_of
+
+    doctype = _doctype_of(invoice)
+    audit.log(
+        audit.REPRINT,
+        detail=message.format(invoice),
+        reference_doctype=doctype,
+        reference_name=invoice,
+        pos_profile=frappe.db.get_value(doctype, invoice, "pos_profile"),
+    )
+
+
+def _send(ip, port, data):
+    try:
+        with socket.create_connection((ip, port), timeout=5) as sock:
+            sock.sendall(data)
+    except OSError as e:
+        frappe.throw(_("Could not reach printer at {0}:{1} ({2})").format(ip, port, str(e)))
+
+
+def build_receipt_bytes(receipt, open_drawer=0):
+    out = bytearray(INIT)
+    if open_drawer:
+        out += KICK_DRAWER
+
+    # Lumen Restaurants: the restaurant's own logo on top when its receipt has
+    # one, our mark at the foot (receipt_images.py).
+    out += ALIGN_CENTER + receipt_images.logo_bytes((receipt.get("receipt_settings") or {}).get("receipt_logo"))
+    out += ALIGN_CENTER + BOLD_ON + DOUBLE_SIZE
+    out += _text(receipt["company"]) + b"\n"
+    out += NORMAL_SIZE + BOLD_OFF
+    if receipt.get("is_bill"):
+        # Lumen Restaurants: a table's bill before it is paid (restaurant.print_bill).
+        out += b"\n" + BOLD_ON + _text("BILL") + BOLD_OFF + b"\n"
+        if receipt.get("table_label"):
+            out += _text(f"Table {receipt['table_label']}") + b"\n"
+    if receipt.get("order_no"):
+        # The number the customer is called by: bigger than anything else on
+        # the paper, because it is the one thing both sides read out loud.
+        out += b"\n" + BOLD_ON + DOUBLE_SIZE
+        out += _text(f"ORDER  {receipt['order_no']}") + b"\n"
+        out += NORMAL_SIZE + BOLD_OFF + b"\n"
+    out += _text(receipt["name"]) + b"\n"
+    out += _text(f"{receipt['posting_date']} {str(receipt['posting_time']).split('.')[0]}") + b"\n"
+    out += _text(receipt["customer_name"] or "") + b"\n"
+    # The selling company's VAT number (its receipt's, else the company's own),
+    # when the shop shows it on receipts.
+    receipt_settings = receipt.get("receipt_settings") or {}
+    tax_id = receipt_settings.get("receipt_tax_id")
+    if tax_id and receipt_settings.get("receipt_show_tax_id"):
+        out += _text(f"VAT {tax_id}") + b"\n"
+    out += ALIGN_LEFT + _line() + b"\n"
+
+    for item in receipt["items"]:
+        # Lumen Restaurants: a paid add-on prints under its dish, the dish's
+        # free choices under its price (modifiers.py).
+        if item.get("addon_of"):
+            out += _text(_pad(f"  + {item['item_name']}"[: WIDTH - 12], _num(item["amount"]))) + b"\n"
+            continue
+        out += _text(item["item_name"][:WIDTH]) + b"\n"
+        qty_part = f"  {_num(item['qty'])} x {_num(item['rate'])}"
+        out += _text(_pad(qty_part, _num(item["amount"]))) + b"\n"
+        if item.get("choices_text"):
+            out += _text(f"  ({item['choices_text']})"[: WIDTH * 2]) + b"\n"
+
+    out += _line() + b"\n"
+    if receipt.get("discount_amount"):
+        out += _text(_pad("Discount", "-" + _num(receipt["discount_amount"]))) + b"\n"
+    for tax in receipt.get("taxes", []):
+        out += _text(_pad(tax["description"][: WIDTH - 12], _num(tax["tax_amount"]))) + b"\n"
+
+    out += BOLD_ON
+    total = receipt.get("rounded_total") or receipt["grand_total"]
+    out += _text(_pad("TOTAL", f"{receipt['currency']} {_num(total)}")) + b"\n"
+    out += BOLD_OFF
+    # A sale in another currency (lumen_restaurants.currency): its local value and rate,
+    # each tender in its own money, and the change in the money it was given
+    # in: local, or the sale's own when it came from that currency's drawer.
+    local = receipt.get("company_currency")
+    foreign = bool(local and receipt.get("currency") != local and receipt.get("base_grand_total") is not None)
+    if foreign:
+        out += _text(_pad(f"= {local}", _num(receipt["base_grand_total"]))) + b"\n"
+        out += _text(f"1 {receipt['currency']} = {flt(receipt.get('conversion_rate')):g} {local}") + b"\n"
+
+    for payment in receipt.get("payments", []):
+        if foreign and payment.get("currency"):
+            shown = f"{payment['currency']} {_num(payment.get('tendered'))}"
+        else:
+            shown = _num(payment["amount"])
+        out += _text(_pad(payment["mode_of_payment"], shown)) + b"\n"
+    if receipt.get("loyalty_amount"):
+        out += _text(_pad("Loyalty points", _num(receipt["loyalty_amount"]))) + b"\n"
+    if receipt.get("change_amount"):
+        if foreign and receipt.get("change_currency") != receipt.get("currency"):
+            change = f"{local} {_num(receipt.get('base_change_amount'))}"
+        elif foreign:
+            change = f"{receipt['currency']} {_num(receipt['change_amount'])}"
+        else:
+            change = _num(receipt["change_amount"])
+        out += _text(_pad("Change", change)) + b"\n"
+    # A sale on account (lumen_restaurants.credit_sales, 0.60.0): what stays owed, on
+    # this sale and in all, and a line for the customer to sign.
+    owed = receipt.get("on_account") or {}
+    if owed and not receipt.get("is_return"):
+        out += BOLD_ON + _text(_pad("Owed on this sale", _num(owed.get("owed_on_sale")))) + b"\n" + BOLD_OFF
+        if owed.get("owed_total") is not None:
+            out += _text(_pad("Owed in all", _num(owed.get("owed_total")))) + b"\n"
+        out += b"\n" + _text("Signature: ______________________") + b"\n"
+    elif owed:
+        out += _text(_pad("Off what is owed", _num(abs(flt(owed.get("amount")))))) + b"\n"
+
+    promos = receipt.get("applied_promotions") or []
+    if promos:
+        out += _line() + b"\n"
+        for promo in promos:
+            out += _text(f"* {promo['title']} (saved {_num(promo['savings'])})") + b"\n"
+    if receipt.get("loyalty_points_earned"):
+        out += _text(f"Points earned: {receipt['loyalty_points_earned']}") + b"\n"
+
+    if receipt.get("is_bill"):
+        out += ALIGN_CENTER + b"\n" + _text("Not a tax invoice. Issued when paid.") + b"\n"
+    out += ALIGN_CENTER + b"\n" + _text("Thank you!") + b"\n"
+    out += b"\n" + receipt_images.mark_bytes() + b"\n" + _text("Lumen Restaurants") + b"\n"
+    out += FEED_CUT
+    return bytes(out)
+
+
+def kitchen_printer(profile_name):
+    ip = frappe.db.get_value("POS Profile", profile_name, "lumenpos_kitchen_printer_ip")
+    port = frappe.db.get_value("POS Profile", profile_name, "lumenpos_kitchen_printer_port") or 9100
+    return ip, int(port)
+
+
+def build_kitchen_bytes(ticket):
+    """The kitchen slip: the number (or the table) huge, the items and their
+    notes, no prices. Prices feed nobody."""
+    out = bytearray(INIT)
+    out += ALIGN_CENTER + BOLD_ON + DOUBLE_SIZE
+    station_prefix = "[BAR] " if getattr(ticket, "station", "") == "Bar" else ""
+    head = f"{station_prefix}# {ticket.order_no}" if ticket.order_no else (f"{station_prefix}{ticket.table_label}" if ticket.table_label else "")
+    out += _text(head) + b"\n"
+    out += NORMAL_SIZE + BOLD_OFF
+    out += _text(ticket.order_type or "") + b"\n"
+    out += _text(str(ticket.created_at)[:16]) + b"\n"
+    out += ALIGN_LEFT + _line() + b"\n" + BOLD_ON
+    from lumen_restaurants import modifiers
+
+    for row in ticket.items:
+        qty = _num(row.qty).rstrip("0").rstrip(".")
+        out += _text(f"{qty} x {row.item_name}"[:WIDTH]) + b"\n"
+        # The guest's choices under the dish: a minus for a without, a plus for
+        # a paid extra (modifiers.py).
+        for choice in modifiers.clean_choices(row.get("modifiers")) if row.get("modifiers") else []:
+            mark = "+" if choice["p"] else ("-" if choice["s"] == "no" else "*")
+            out += BOLD_OFF + _text(f"   {mark} {choice['t']}"[:WIDTH]) + b"\n" + BOLD_ON
+        if row.note:
+            out += BOLD_OFF + _text(f"   >> {row.note}"[:WIDTH]) + b"\n" + BOLD_ON
+    out += BOLD_OFF
+    if ticket.note:
+        out += _line() + b"\n" + _text(ticket.note[: WIDTH * 2]) + b"\n"
+    out += FEED_CUT
+    return bytes(out)
+
+
+def auto_print_kitchen(ticket):
+    """Called by the sale / the fire button. Prints only when a kitchen printer
+    is configured; a slip that cannot print is never allowed to cost a sale."""
+    ip, port = kitchen_printer(ticket.pos_profile)
+    if not ip:
+        return False
+    with socket.create_connection((ip, int(port)), timeout=5) as sock:
+        sock.sendall(build_kitchen_bytes(ticket))
+    return True
+
+
+@frappe.whitelist()
+def print_kitchen_ticket(ticket: str):
+    """The reprint button on the kitchen screen."""
+    doc = frappe.get_doc("POS Kitchen Ticket", ticket)
+    doc.check_permission("read")
+    ip, port = kitchen_printer(doc.pos_profile)
+    if not ip:
+        frappe.throw(
+            _("No kitchen printer is set on POS Profile {0}. Use the kitchen screen, or set "
+              "Kitchen Printer IP on the profile.").format(doc.pos_profile)
+        )
+    _send(ip, port, build_kitchen_bytes(doc))
+    return {"printed": True}
+
+
+
+
+def bar_printer(profile_name):
+    ip = frappe.db.get_value("POS Profile", profile_name, "lumenpos_bar_printer_ip")
+    port = frappe.db.get_value("POS Profile", profile_name, "lumenpos_bar_printer_port") or 9100
+    return ip, int(port) if port else 9100
+
+
+def auto_print_bar(ticket):
+    """Called by the sale / the fire button. Prints only when a bar printer
+    is configured; a slip that cannot print is never allowed to cost a sale."""
+    ip, port = bar_printer(ticket.pos_profile)
+    if not ip:
+        return False
+    with socket.create_connection((ip, int(port)), timeout=5) as sock:
+        sock.sendall(build_kitchen_bytes(ticket))
+    return True
+
+
+@frappe.whitelist()
+def print_bar_ticket(ticket: str):
+    """The reprint button on the bar screen."""
+    doc = frappe.get_doc("POS Kitchen Ticket", ticket)
+    doc.check_permission("read")
+    ip, port = bar_printer(doc.pos_profile)
+    if not ip:
+        frappe.throw(
+            _("No bar printer is set on POS Profile {0}. Use the bar screen, or set "
+              "Bar Printer IP on the profile.").format(doc.pos_profile)
+        )
+    _send(ip, port, build_kitchen_bytes(doc))
+    return {"printed": True}
+
+
+def _text(value):
+    # Thermal printers default to single-byte codepages; replace anything
+    # exotic rather than printing garbage.
+    return str(value).encode("ascii", errors="replace")
+
+
+def _line():
+    return b"-" * WIDTH
+
+
+def _pad(left, right):
+    right = str(right)
+    space = max(1, WIDTH - len(left) - len(right))
+    return f"{left}{' ' * space}{right}"
+
+
+def _num(value):
+    return f"{flt(value):,.2f}"

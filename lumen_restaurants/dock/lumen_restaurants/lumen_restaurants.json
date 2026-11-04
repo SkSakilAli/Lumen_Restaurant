@@ -1,0 +1,23 @@
+{
+ "app": "lumen_restaurants",
+ "creation": "2026-10-17 15:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Dock",
+ "idx": 0,
+ "items": [
+  {
+   "added": 0,
+   "hidden": 0,
+   "icon": "storefront-soft",
+   "link_to": "Lumen Restaurants",
+   "link_type": "Sidebar",
+   "title": "Lumen Restaurants"
+  }
+ ],
+ "modified": "2026-10-17 16:00:00.000000",
+ "modified_by": "Administrator",
+ "name": "lumen_restaurants",
+ "owner": "Administrator",
+ "standard": 1,
+ "user": ""
+}

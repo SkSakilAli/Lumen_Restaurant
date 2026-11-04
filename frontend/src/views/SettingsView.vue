@@ -1,0 +1,4975 @@
+<!-- Copyright (c) 2026 Lumen Solutions
+     SPDX-License-Identifier: AGPL-3.0-only
+     "LumenPOS" is a trademark of Lumen Solutions. See TRADEMARKS.md. -->
+<template>
+  <div class="settings">
+    <!-- Segmented pill tab bar -->
+    <nav class="tabs">
+      <button
+        v-for="tab in tabs"
+        :key="tab"
+        class="tab"
+        :class="{ active: activeTab === tab }"
+        @click="activeTab = tab"
+      >
+        {{ t(tab) }}
+      </button>
+    </nav>
+
+    <!-- ============ PROMOTIONS ============ -->
+    <section v-if="activeTab === 'Promotions'" class="tab-body">
+      <!-- LIST -->
+      <div v-if="!editingPromo" class="list-view">
+        <div class="list-head">
+          <input v-model="promoSearch" class="list-search" :placeholder="t('Search promotions…')" />
+          <button v-if="perms.promotions?.create" class="btn btn-primary" @click="newPromotion">{{ t('+ New Promotion') }}</button>
+        </div>
+        <div v-if="!promotions.length" class="muted empty">{{ t('No promotions yet') }}</div>
+        <div v-else class="card-list">
+          <button
+            v-for="promo in filteredPromotions"
+            :key="promo.name"
+            class="entity-card"
+            @click="editPromotion(promo.name)"
+          >
+            <span class="status-dot" :class="{ on: promo.status === 'Active' }" />
+            <div class="entity-main">
+              <div class="entity-title">{{ promo.title }}</div>
+              <div class="muted small entity-sub">
+                {{ t(promo.promotion_type) }}
+                <span v-if="promo.start_date || promo.end_date"> · {{ promo.start_date || '…' }} → {{ promo.end_date || '…' }}</span>
+              </div>
+            </div>
+            <span v-if="promo.requires_coupon" class="entity-meta"><Icon name="ticket" /> {{ promo.coupon_code }}</span>
+            <span v-if="promo.expired" class="status-pill expired">{{ t('Expired') }}</span>
+            <span class="status-pill" :class="{ on: promo.status === 'Active' }">{{ t(promo.status) }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- EDITOR -->
+      <div v-else class="editor">
+        <!-- Basics -->
+        <div class="sec-card">
+          <div class="sec-title"><Icon name="bulb" /> {{ t('Basics') }}</div>
+          <div class="field-grid">
+            <label class="field span-2">
+              <span>{{ t('Name *') }}</span>
+              <input v-model="promoForm.title" :placeholder="t('e.g. Buy 2 Get 1 Free')" />
+            </label>
+            <label class="field">
+              <span>{{ t('Priority') }}</span>
+              <input type="number" v-model.number="promoForm.priority" />
+            </label>
+          </div>
+          <div class="seg-field">
+            <span class="seg-label">{{ t('Type') }}</span>
+            <div class="segmented">
+              <button
+                v-for="opt in PROMO_TYPES"
+                :key="opt"
+                class="seg-btn"
+                :class="{ on: promoForm.promotion_type === opt }"
+                @click="promoForm.promotion_type = opt"
+              >
+                {{ t(opt) }}
+              </button>
+            </div>
+          </div>
+          <div class="toggle-row">
+            <label class="inline-check">
+              <input type="checkbox" v-model="promoForm.status" true-value="Active" false-value="Inactive" />
+              {{ t('Active') }}
+            </label>
+            <label class="inline-check">
+              <input type="checkbox" v-model="promoForm.stackable" :true-value="1" :false-value="0" />
+              {{ t('Can combine with other promotions') }}
+            </label>
+          </div>
+        </div>
+
+        <!-- The offer -->
+        <div class="sec-card">
+          <div class="sec-title"><Icon name="gift" /> {{ t('Offer') }}</div>
+          <label class="field" style="max-width: 360px; margin-bottom: 14px">
+            <span>{{ t('Calculate discount on') }}</span>
+            <select v-model="promoForm.price_basis">
+              <option value="Price Book Price">{{ t('Price book price (stacks on an active price book)') }}</option>
+              <option value="Standard Price">{{ t('Standard price (lowest of book vs standard − promo)') }}</option>
+            </select>
+          </label>
+          <div class="field-grid" v-if="promoForm.promotion_type === 'Simple Discount'">
+            <label class="field">
+              <span>{{ t('Discount type') }}</span>
+              <select v-model="promoForm.discount_type">
+                <option value="Percentage">{{ t('Percentage') }}</option><option value="Amount">{{ t('Amount') }}</option><option value="Fixed Price">{{ t('Fixed Price') }}</option>
+              </select>
+            </label>
+            <label class="field"><span>{{ t('Value') }}</span><input type="number" min="0" v-model.number="promoForm.discount_value" /></label>
+          </div>
+          <template v-else-if="promoForm.promotion_type === 'Buy X Get Y'">
+            <p class="muted small" style="margin: 0 0 10px">
+              {{ t('Multiple') }} <b>{{ t('Buy') }}</b> {{ t('rows = the customer can buy') }} <b>{{ t('any') }}</b> {{ t('of them (mix & match counts).') }}
+              {{ t('Multiple') }} <b>{{ t('Get') }}</b> {{ t('rows = any of them can receive the reward (cheapest first).') }}
+            </p>
+            <div class="field-grid">
+              <label class="field"><span>{{ t('Buy qty') }}</span><input type="number" min="1" v-model.number="promoForm.buy_qty" /></label>
+              <label class="field"><span>{{ t('Get qty') }}</span><input type="number" min="1" v-model.number="promoForm.get_qty" /></label>
+              <label class="field">
+                <span>{{ t('Reward') }}</span>
+                <select v-model="promoForm.get_discount_type">
+                  <option value="Free">{{ t('Free') }}</option><option value="Percentage">{{ t('Percentage') }}</option><option value="Amount">{{ t('Amount') }}</option><option value="Fixed Price">{{ t('Fixed Price') }}</option>
+                </select>
+              </label>
+              <label class="field" v-if="promoForm.get_discount_type !== 'Free'">
+                <span>{{ t('Reward value') }}</span><input type="number" min="0" v-model.number="promoForm.get_discount_value" />
+              </label>
+              <label class="field"><span>{{ t('Max uses/sale (0=∞)') }}</span><input type="number" min="0" v-model.number="promoForm.max_applications" /></label>
+            </div>
+          </template>
+          <div class="field-grid" v-else-if="promoForm.promotion_type === 'Spend and Save'">
+            <label class="field"><span>{{ t('Minimum spend') }}</span><input type="number" min="0" v-model.number="promoForm.min_spend" /></label>
+            <label class="field">
+              <span>{{ t('Discount type') }}</span>
+              <select v-model="promoForm.basket_discount_type"><option value="Percentage">{{ t('Percentage') }}</option><option value="Amount">{{ t('Amount') }}</option></select>
+            </label>
+            <label class="field"><span>{{ t('Value') }}</span><input type="number" min="0" v-model.number="promoForm.basket_discount_value" /></label>
+          </div>
+        </div>
+
+        <!-- Products -->
+        <div class="sec-card">
+          <div class="sec-title">
+            <span><Icon name="store" /> {{ t('Products') }}</span>
+            <label class="inline-check">
+              <input type="checkbox" v-model="promoForm.apply_on_all" :true-value="1" :false-value="0" />
+              {{ t('Apply on all products') }}
+            </label>
+          </div>
+          <p v-if="promoForm.apply_on_all" class="muted small" style="margin: 0 0 10px">
+            {{ t('All products are included. Add rows below to') }} <b>{{ t('exclude') }}</b> {{ t('items, groups or brands.') }}
+          </p>
+          <div v-if="promoForm.items && promoForm.items.length" class="prod-head">
+            <span class="ph-mode">{{ t('Include') }} / {{ t('Exclude') }}</span>
+            <span class="ph-type">{{ t('Type') }}</span>
+            <span class="ph-pick">{{ t('Item') }}</span>
+          </div>
+          <div v-for="(row, i) in promoForm.items" :key="i" class="item-row">
+            <select
+              v-model="row.exclude"
+              class="mode-select"
+              :class="{ excluding: row.exclude }"
+            >
+              <option :value="0">{{ t('Include') }}</option>
+              <option :value="1">{{ t('Exclude') }}</option>
+            </select>
+            <select v-model="row.applies_to" style="width: 110px" @change="row.value = ''; row.label = ''">
+              <option value="Item">{{ t('Item') }}</option><option value="Item Group">{{ t('Item Group') }}</option><option value="Brand">{{ t('Brand') }}</option><option value="Tag">{{ t('Tag') }}</option>
+            </select>
+            <LinkPicker
+              :doctype="row.applies_to"
+              v-model="row.value"
+              :label="row.label"
+              :placeholder="row.applies_to === 'Item' ? t('Search by name, code or barcode…') : t('Search and pick from the list…')"
+              @picked="(option) => (row.label = option?.item_name || option?.name || '')"
+            />
+            <select
+              v-if="promoForm.promotion_type === 'Buy X Get Y' && !row.exclude"
+              v-model="row.role"
+              style="width: 84px"
+            >
+              <option value="Buy">{{ t('Buy') }}</option><option value="Get">{{ t('Get') }}</option>
+            </select>
+            <button class="btn-ghost" @click="promoForm.items.splice(i, 1)"><Icon name="close" /></button>
+          </div>
+          <button
+            class="btn btn-outline add-row"
+            @click="promoForm.items.push({ applies_to: 'Item', value: '', label: '', role: 'Buy', qty: 1, exclude: promoForm.apply_on_all ? 1 : 0 })"
+          >
+            {{ t('+ Add product row') }}
+          </button>
+          <p v-if="hasInvalidRows" class="row-warning">
+            {{ t('⚠ Pick every product from the dropdown. Rows without a valid selection can\'t be saved.') }}
+          </p>
+        </div>
+
+        <!-- When & where -->
+        <div class="sec-card">
+          <div class="sec-title"><Icon name="store" /> {{ t('When & where') }}</div>
+          <div class="field-grid">
+            <label class="field">
+              <span>{{ t('Start date (optional, empty means always)') }}</span>
+              <input type="date" v-model="promoForm.start_date" />
+            </label>
+            <label class="field">
+              <span>{{ t('End date (optional)') }}</span>
+              <input type="date" v-model="promoForm.end_date" />
+            </label>
+            <label class="field">
+              <span>{{ t('Daily from (optional, empty means all day)') }}</span>
+              <input type="time" v-model="promoForm.start_time" />
+            </label>
+            <label class="field">
+              <span>{{ t('Daily until (optional)') }}</span>
+              <input type="time" v-model="promoForm.end_time" />
+            </label>
+          </div>
+          <div class="day-row">
+            <button
+              v-for="day in DAYS"
+              :key="day"
+              class="day-chip"
+              :class="{ on: promoForm[day] }"
+              @click="promoForm[day] = promoForm[day] ? 0 : 1"
+            >
+              {{ t('day:' + day) }}
+            </button>
+          </div>
+          <div class="sub-label">{{ t('Outlets & customers') }}</div>
+          <ScopePicker v-model:company="promoForm.company" v-model:outlets="promoForm.pos_profiles" />
+          <div class="item-row">
+            <LinkPicker
+              doctype="Customer Group"
+              v-model="groupPick"
+              :placeholder="t('Limit to customer group… (empty = everyone)')"
+              @picked="(option) => addGroup(promoForm, option)"
+            />
+            <span v-for="(group, i) in promoForm.customer_groups" :key="group" class="chip-sm">
+              {{ group }} <button class="btn-ghost" @click="promoForm.customer_groups.splice(i, 1)"><Icon name="close" /></button>
+            </span>
+          </div>
+        </div>
+
+        <!-- Coupons (only when required) -->
+        <div class="sec-card">
+          <div class="sec-title">
+            <span><Icon name="ticket" /> {{ t('Coupons') }}</span>
+            <label class="inline-check">
+              <input type="checkbox" v-model="promoForm.requires_coupon" :true-value="1" :false-value="0" />
+              {{ t('Requires coupon code') }}
+            </label>
+          </div>
+          <template v-if="promoForm.requires_coupon">
+            <label class="field" style="max-width: 360px; margin-bottom: 12px">
+              <span>{{ t('Shared code (optional)') }}</span>
+              <input
+                v-model="promoForm.coupon_code"
+                :placeholder="t('Shared code (optional)')"
+                :title="t('An optional master code that always works (no limit). Leave empty to allow only the unique codes below.')"
+              />
+            </label>
+            <div class="coupon-pool">
+              <div class="muted small" style="margin-bottom: 10px">
+                {{ t('The shared code above is optional and has no limit, it keeps working even after the codes below run out. The codes you generate/import here are unique and limited, when they\'re all used up, only the shared code still works (or none, if you left it empty).') }}
+              </div>
+              <template v-if="promoForm.name">
+                <div v-if="couponStats" class="coupon-stats">
+                  {{ t('Coupons: {total} total · {available} available · {redemptions} redemptions', couponStats) }}
+                </div>
+                <div class="item-row">
+                  <input type="number" min="1" max="5000" v-model.number="couponGen.count" :placeholder="t('How many')" style="width: 110px" />
+                  <input v-model="couponGen.prefix" :placeholder="t('Prefix (optional)')" style="width: 140px" />
+                  <label class="inline-num" :title="t('How many times each code can be used (0 = unlimited)')">{{ t('Uses/code') }}<input type="number" min="0" v-model.number="couponGen.usage_limit" style="width: 64px" /></label>
+                  <input type="date" v-model="couponGen.valid_until" :title="t('Valid until (optional)')" />
+                  <button class="btn btn-outline" :disabled="couponBusy || !couponGen.count" @click="generateCoupons">{{ couponBusy ? t('Working…') : t('Generate') }}</button>
+                </div>
+                <div class="item-row">
+                  <label class="inline-num" :title="t('How many times each code can be used (0 = unlimited)')">{{ t('Uses/code') }}<input type="number" min="0" v-model.number="couponImp.usage_limit" style="width: 64px" /></label>
+                  <input type="date" v-model="couponImp.valid_until" :title="t('Valid until (optional)')" />
+                  <button class="btn btn-outline" :disabled="couponBusy" @click="couponFileInput?.click()"><Icon name="upload" /> {{ t('Import codes (Excel/CSV)') }}</button>
+                  <input ref="couponFileInput" type="file" accept=".csv,.xlsx,.xlsm,.xls" style="display: none" @change="importCoupons" />
+                  <button class="btn btn-outline" :disabled="couponBusy || !couponStats?.total" @click="exportCoupons"><Icon name="download" /> {{ t('Export codes') }}</button>
+                  <button v-if="couponStats?.available" class="btn-ghost danger" @click="deleteUnusedCoupons">{{ t('Delete unused') }}</button>
+                </div>
+                <div v-if="couponMsg" class="gate-ok">{{ couponMsg }}</div>
+              </template>
+              <div v-else class="muted small">{{ t('Save the promotion first, then generate or import coupon codes here.') }}</div>
+            </div>
+          </template>
+        </div>
+
+        <!-- Test (collapsible) -->
+        <div v-if="promoForm.name" class="sec-card">
+          <button class="sec-title collapsible" @click="showTest = !showTest">
+            <span><Icon name="play" /> {{ t('Test this promotion (saved version)') }}</span>
+            <span class="muted small">{{ showTest ? '−' : '+' }}</span>
+          </button>
+          <template v-if="showTest">
+            <div v-for="(row, i) in testBasket" :key="i" class="item-row">
+              <LinkPicker
+                doctype="Item"
+                v-model="row.item_code"
+                :label="row.label"
+                :placeholder="t('Test item…')"
+                @picked="(option) => (row.label = option?.item_name || option?.name || '')"
+              />
+              <input type="number" min="1" v-model.number="row.qty" style="width: 70px" />
+              <button class="btn-ghost" @click="testBasket.splice(i, 1)"><Icon name="close" /></button>
+            </div>
+            <div class="item-row">
+              <button class="btn btn-outline" @click="testBasket.push({ item_code: '', label: '', qty: 1 })">
+                {{ t('+ Add test item') }}
+              </button>
+              <button class="btn btn-primary" :disabled="testing || !testBasket.some((row) => row.item_code)" @click="runTest">
+                <Icon name="play" /> {{ testing ? t('Testing…') : t('Run test') }}
+              </button>
+            </div>
+
+            <div v-if="testResult" class="test-report">
+              <div v-for="gate in testResult.gates" :key="gate.label" :class="gate.ok ? 'gate-ok' : 'gate-bad'">
+                {{ gate.ok ? '✓' : '✗' }} {{ gate.label }}
+              </div>
+              <div v-for="(row, i) in testResult.row_matches" :key="'m' + i"
+                   :class="row.matches.length ? 'gate-ok' : 'gate-bad'">
+                {{ row.matches.length ? '✓' : '✗' }}
+                {{ row.role }} {{ t('row') }} “{{ row.value }}” ({{ row.applies_to }}), 
+                {{ row.matches.length ? t('matches {list}', { list: row.matches.join(', ') }) : t('matches NOTHING in the basket') }}
+              </div>
+              <div v-for="(warning, i) in testResult.price_warnings" :key="'w' + i" class="gate-bad">
+                ⚠ {{ warning }}
+              </div>
+              <div class="test-verdict" :class="testResult.result.total_savings > 0 ? 'gate-ok' : 'gate-bad'">
+                {{ testResult.result.total_savings > 0
+                  ? t('✓ APPLIES, saves {amount}', { amount: testResult.result.total_savings })
+                  : t('✗ Does not apply to this basket') }}
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- Sticky footer -->
+        <div class="editor-footer">
+          <button v-if="promoForm.name && perms.promotions?.delete" class="btn btn-outline danger" @click="deletePromotion">{{ t('Delete') }}</button>
+          <span style="flex: 1" />
+          <button class="btn btn-outline" @click="editingPromo = false">{{ t('Cancel') }}</button>
+          <button class="btn btn-primary" :disabled="saving" @click="savePromotion">
+            {{ saving ? t('Saving…') : t('Save Promotion') }}
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CASHBACK ============ -->
+    <section v-if="activeTab === 'Cashback'" class="tab-body">
+      <!-- LIST -->
+      <div v-if="!editingCashback" class="list-view">
+        <div class="list-head">
+          <input v-model="cashbackSearch" class="list-search" :placeholder="t('Search cashback rules…')" />
+          <button v-if="perms.cashback?.create" class="btn btn-primary" @click="newCashbackRule">{{ t('+ New Cashback Rule') }}</button>
+        </div>
+        <p class="muted hint-row">
+          {{ t('A cashback rule gives the customer back part of a qualifying sale as cashback, which they spend later with the Cashback payment method. Balance is per customer, so pick a customer on the sale to earn or spend.') }}
+        </p>
+
+        <!-- Accounting: where cashback is booked and what is waiting -->
+        <div class="sec-card cb-accounting">
+          <div class="sec-title">
+            <span><Icon name="bank" /> {{ t('Accounting') }}</span>
+            <button
+              v-if="perms.settings && cashbackAccounting.some((c) => c.pending_count)"
+              class="btn btn-outline"
+              :disabled="cashbackBooking"
+              @click="bookCashbackNow"
+            >
+              {{ cashbackBooking ? t('Booking…') : t('Book to accounts now') }}
+            </button>
+          </div>
+          <p class="muted small" style="margin: 0 0 10px">
+            {{ t('Cashback is booked to the accounts once a day, as one summary entry per company and outlet. Earned cashback goes to the expense and liability accounts, and expired or returned cashback is taken back out of them. Cashback a customer spends is booked by the sale itself. Choose the accounts in General, Company accounts.') }}
+          </p>
+          <div v-if="cashbackBookMsg" :class="cashbackBookFailed ? 'gate-bad' : 'gate-ok'" style="margin-bottom: 8px">{{ cashbackBookMsg }}</div>
+          <div v-if="!cashbackAccounting.length" class="muted small">{{ t('No cashback activity yet.') }}</div>
+          <div v-for="row in cashbackAccounting" :key="row.company" class="cb-company">
+            <div class="row-title">{{ row.company }}</div>
+            <div class="cb-grid">
+              <span class="muted">{{ t('Liability account') }}</span>
+              <span>
+                <span class="mono">{{ row.liability_account }}</span>
+                <span v-if="row.liability_state" class="muted small" :title="row.liability_problem || ''">
+                  · {{ cashbackAccountState(row.liability_state) }}
+                </span>
+              </span>
+              <span class="muted">{{ t('Expense account') }}</span>
+              <span>
+                <span class="mono">{{ row.expense_account }}</span>
+                <span v-if="row.expense_state" class="muted small" :title="row.expense_problem || ''">
+                  · {{ cashbackAccountState(row.expense_state) }}
+                </span>
+              </span>
+              <span class="muted">{{ t('Waiting to be booked') }}</span>
+              <span v-if="row.pending_count">
+                {{ t('{n} entries since {date}: earned {earned}, expired or returned {back}', { n: row.pending_count, date: row.pending_since, earned: money(row.pending_earned), back: money(row.pending_given_back) }) }}
+              </span>
+              <span v-else>{{ t('Nothing waiting') }}</span>
+              <span class="muted">{{ t('Customers hold') }}</span>
+              <span>{{ money(row.outstanding) }}</span>
+              <span class="muted">{{ t('Liability account balance') }}</span>
+              <span>
+                {{ row.liability_balance === null ? t('No entries yet') : money(row.liability_balance) }}
+                <span v-if="row.last_journal_entry" class="muted small"> · {{ t('last entry {name}', { name: row.last_journal_entry }) }}</span>
+              </span>
+            </div>
+          </div>
+          <p v-if="cashbackAccounting.length" class="muted small" style="margin: 10px 0 0">
+            {{ t('The liability balance equals what customers hold once everything is booked and the shifts are closed.') }}
+          </p>
+        </div>
+
+        <div v-if="!cashbackRules.length" class="muted empty">{{ t('No cashback rules yet') }}</div>
+        <div v-else class="card-list">
+          <button
+            v-for="rule in filteredCashbackRules"
+            :key="rule.name"
+            class="entity-card"
+            @click="editCashbackRule(rule.name)"
+          >
+            <span class="status-dot" :class="{ on: rule.status === 'Active' }" />
+            <div class="entity-main">
+              <div class="entity-title">{{ rule.title }}</div>
+              <div class="muted small entity-sub">
+                {{ rule.amount_type === 'Fixed' ? money(rule.amount_value) : rule.amount_value + '%' }}
+                <span v-if="rule.start_date || rule.end_date"> · {{ rule.start_date || '…' }} → {{ rule.end_date || '…' }}</span>
+              </div>
+            </div>
+            <span v-if="rule.requires_coupon" class="entity-meta"><Icon name="ticket" /> {{ rule.coupon_code }}</span>
+            <span v-if="rule.expired" class="status-pill expired">{{ t('Expired') }}</span>
+            <span class="status-pill" :class="{ on: rule.status === 'Active' }">{{ t(rule.status) }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- EDITOR -->
+      <div v-else class="editor">
+        <!-- Basics -->
+        <div class="sec-card">
+          <div class="sec-title"><Icon name="bulb" /> {{ t('Basics') }}</div>
+          <div class="field-grid">
+            <label class="field span-2">
+              <span>{{ t('Name *') }}</span>
+              <input v-model="cashbackForm.title" :placeholder="t('e.g. 5% back on everything')" />
+            </label>
+            <label class="field">
+              <span>{{ t('Priority') }}</span>
+              <input type="number" v-model.number="cashbackForm.priority" />
+            </label>
+          </div>
+          <label class="field span-2" style="display:block; margin-top: 12px">
+            <span>{{ t('Description (optional)') }}</span>
+            <input v-model="cashbackForm.description" :placeholder="t('Shown to managers only')" />
+          </label>
+          <div class="toggle-row">
+            <label class="inline-check">
+              <input type="checkbox" v-model="cashbackForm.status" true-value="Active" false-value="Inactive" />
+              {{ t('Active') }}
+            </label>
+            <label class="inline-check">
+              <input type="checkbox" v-model="cashbackForm.stackable" :true-value="1" :false-value="0" />
+              {{ t('Can combine with other cashback rules') }}
+            </label>
+          </div>
+        </div>
+
+        <!-- The reward -->
+        <div class="sec-card">
+          <div class="sec-title"><Icon name="gift" /> {{ t('Cashback amount') }}</div>
+          <div class="seg-field">
+            <span class="seg-label">{{ t('Give back') }}</span>
+            <div class="segmented">
+              <button
+                class="seg-btn"
+                :class="{ on: cashbackForm.amount_type === 'Percentage' }"
+                @click="cashbackForm.amount_type = 'Percentage'"
+              >
+                {{ t('Percentage of the sale') }}
+              </button>
+              <button
+                class="seg-btn"
+                :class="{ on: cashbackForm.amount_type === 'Fixed' }"
+                @click="cashbackForm.amount_type = 'Fixed'"
+              >
+                {{ t('Fixed amount') }}
+              </button>
+            </div>
+          </div>
+          <div class="field-grid">
+            <label class="field">
+              <span>{{ cashbackForm.amount_type === 'Fixed' ? t('Amount to give back') : t('Percentage (%)') }}</span>
+              <input type="number" min="0" step="0.01" v-model.number="cashbackForm.amount_value" />
+            </label>
+            <label class="field" v-if="cashbackForm.amount_type !== 'Fixed'">
+              <span>{{ t('Maximum cashback per sale (0 = no cap)') }}</span>
+              <input type="number" min="0" step="0.01" v-model.number="cashbackForm.max_cashback" />
+            </label>
+            <label class="field">
+              <span>{{ t('Minimum spend to qualify (0 = none)') }}</span>
+              <input type="number" min="0" step="0.01" v-model.number="cashbackForm.min_spend" />
+            </label>
+          </div>
+          <p class="muted small" style="margin: 10px 0 0">
+            {{ cashbackForm.amount_type === 'Fixed'
+              ? t('The customer gets this fixed amount back when the qualifying items reach the minimum spend.')
+              : t('The customer gets this percentage of the qualifying items back as cashback.') }}
+          </p>
+        </div>
+
+        <!-- Validity -->
+        <div class="sec-card">
+          <div class="sec-title"><Icon name="store" /> {{ t('Validity of earned cashback') }}</div>
+          <div class="field-grid">
+            <label class="field">
+              <span>{{ t('Expires after (days, 0 = never)') }}</span>
+              <input type="number" min="0" v-model.number="cashbackForm.validity_days" />
+            </label>
+            <label class="field">
+              <span>{{ t('Usable after (days, 0 = right away)') }}</span>
+              <input type="number" min="0" v-model.number="cashbackForm.activation_delay_days" />
+            </label>
+          </div>
+          <p class="muted small" style="margin: 10px 0 0">
+            {{ t('Each earning keeps its own window. A delay lets you hold the cashback for a few days before the customer can spend it.') }}
+          </p>
+        </div>
+
+        <!-- Products -->
+        <div class="sec-card">
+          <div class="sec-title">
+            <span><Icon name="store" /> {{ t('Products') }}</span>
+            <label class="inline-check">
+              <input type="checkbox" v-model="cashbackForm.apply_on_all" :true-value="1" :false-value="0" />
+              {{ t('Apply on all products') }}
+            </label>
+          </div>
+          <p v-if="cashbackForm.apply_on_all" class="muted small" style="margin: 0 0 10px">
+            {{ t('All products are included. Add rows below to') }} <b>{{ t('exclude') }}</b> {{ t('items, groups or brands.') }}
+          </p>
+          <div v-if="cashbackForm.items && cashbackForm.items.length" class="prod-head">
+            <span class="ph-mode">{{ t('Include') }} / {{ t('Exclude') }}</span>
+            <span class="ph-type">{{ t('Type') }}</span>
+            <span class="ph-pick">{{ t('Item') }}</span>
+          </div>
+          <div v-for="(row, i) in cashbackForm.items" :key="i" class="item-row">
+            <select v-model="row.exclude" class="mode-select" :class="{ excluding: row.exclude }">
+              <option :value="0">{{ t('Include') }}</option>
+              <option :value="1">{{ t('Exclude') }}</option>
+            </select>
+            <select v-model="row.applies_to" style="width: 110px" @change="row.value = ''; row.label = ''">
+              <option value="Item">{{ t('Item') }}</option><option value="Item Group">{{ t('Item Group') }}</option><option value="Brand">{{ t('Brand') }}</option><option value="Tag">{{ t('Tag') }}</option>
+            </select>
+            <LinkPicker
+              :doctype="row.applies_to"
+              v-model="row.value"
+              :label="row.label"
+              :placeholder="row.applies_to === 'Item' ? t('Search by name, code or barcode…') : t('Search and pick from the list…')"
+              @picked="(option) => (row.label = option?.item_name || option?.name || '')"
+            />
+            <button class="btn-ghost" @click="cashbackForm.items.splice(i, 1)"><Icon name="close" /></button>
+          </div>
+          <button
+            class="btn btn-outline add-row"
+            @click="cashbackForm.items.push({ applies_to: 'Item', value: '', label: '', exclude: cashbackForm.apply_on_all ? 1 : 0 })"
+          >
+            {{ t('+ Add product row') }}
+          </button>
+          <p v-if="hasInvalidCashbackRows" class="row-warning">
+            {{ t('⚠ Pick every product from the dropdown. Rows without a valid selection can\'t be saved.') }}
+          </p>
+        </div>
+
+        <!-- When & where -->
+        <div class="sec-card">
+          <div class="sec-title"><Icon name="store" /> {{ t('When & where') }}</div>
+          <div class="field-grid">
+            <label class="field">
+              <span>{{ t('Start date (optional, empty means always)') }}</span>
+              <input type="date" v-model="cashbackForm.start_date" />
+            </label>
+            <label class="field">
+              <span>{{ t('End date (optional)') }}</span>
+              <input type="date" v-model="cashbackForm.end_date" />
+            </label>
+            <label class="field">
+              <span>{{ t('Daily from (optional, empty means all day)') }}</span>
+              <input type="time" v-model="cashbackForm.start_time" />
+            </label>
+            <label class="field">
+              <span>{{ t('Daily until (optional)') }}</span>
+              <input type="time" v-model="cashbackForm.end_time" />
+            </label>
+          </div>
+          <div class="day-row">
+            <button
+              v-for="day in DAYS"
+              :key="day"
+              class="day-chip"
+              :class="{ on: cashbackForm[day] }"
+              @click="cashbackForm[day] = cashbackForm[day] ? 0 : 1"
+            >
+              {{ t('day:' + day) }}
+            </button>
+          </div>
+          <div class="sub-label">{{ t('Outlets & customers') }}</div>
+          <ScopePicker v-model:company="cashbackForm.company" v-model:outlets="cashbackForm.pos_profiles" />
+          <div class="item-row">
+            <LinkPicker
+              doctype="Customer Group"
+              v-model="groupPick"
+              :placeholder="t('Limit to customer group… (empty = everyone)')"
+              @picked="(option) => addGroup(cashbackForm, option)"
+            />
+            <span v-for="(group, i) in cashbackForm.customer_groups" :key="group" class="chip-sm">
+              {{ group }} <button class="btn-ghost" @click="cashbackForm.customer_groups.splice(i, 1)"><Icon name="close" /></button>
+            </span>
+          </div>
+        </div>
+
+        <!-- Coupons -->
+        <div class="sec-card">
+          <div class="sec-title">
+            <span><Icon name="ticket" /> {{ t('Coupons') }}</span>
+            <label class="inline-check">
+              <input type="checkbox" v-model="cashbackForm.requires_coupon" :true-value="1" :false-value="0" />
+              {{ t('Requires coupon code') }}
+            </label>
+          </div>
+          <label v-if="cashbackForm.requires_coupon" class="field" style="max-width: 360px">
+            <span>{{ t('Coupon code') }}</span>
+            <input v-model="cashbackForm.coupon_code" :placeholder="t('e.g. WELCOME')" />
+          </label>
+        </div>
+
+        <!-- Sticky footer -->
+        <div class="editor-footer">
+          <button v-if="cashbackForm.name && perms.cashback?.delete" class="btn btn-outline danger" @click="deleteCashbackRule">{{ t('Delete') }}</button>
+          <span style="flex: 1" />
+          <button class="btn btn-outline" @click="editingCashback = false">{{ t('Cancel') }}</button>
+          <button class="btn btn-primary" :disabled="saving" @click="saveCashbackRule">
+            {{ saving ? t('Saving…') : t('Save Cashback Rule') }}
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ BUNDLES ============ -->
+    <section v-if="activeTab === 'Bundles'" class="tab-body">
+      <!-- LIST -->
+      <div v-if="!editingBundle" class="list-view">
+        <div class="list-head">
+          <input v-model="bundleSearch" class="list-search" :placeholder="t('Search bundles…')" />
+          <button v-if="perms.bundles?.create" class="btn btn-primary" @click="newBundle">{{ t('+ New Bundle') }}</button>
+        </div>
+        <p class="muted hint-row">
+          {{ t('A bundle is sold from the sell screen with one tap: its items land in the cart as separate lines (each individually returnable) priced together at the bundle price.') }}
+        </p>
+        <div v-if="!bundles.length" class="muted empty">{{ t('No bundles yet') }}</div>
+        <div v-else class="card-list">
+          <button v-for="bundle in filteredBundles" :key="bundle.name" class="entity-card" @click="editBundle(bundle)">
+            <span class="status-dot" :class="{ on: bundle.status === 'Active' }" />
+            <div class="entity-main">
+              <div class="entity-title"><Icon name="gift" /> {{ bundle.title }}</div>
+              <div class="muted small entity-sub">
+                {{ bundle.items.map((c) => `${c.qty} × ${c.item_name || c.item_code}`).join(', ') }}
+                <span v-if="bundle.valid_from || bundle.valid_to"> · {{ bundle.valid_from || '…' }} → {{ bundle.valid_to || '…' }}</span>
+              </div>
+            </div>
+            <span v-if="bundle.expired" class="status-pill expired">{{ t('Expired') }}</span>
+            <span class="status-pill" :class="{ on: bundle.status === 'Active' }">
+              {{ money(bundle.bundle_price) }}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <!-- EDITOR -->
+      <div v-else class="editor">
+        <!-- Basics -->
+        <div class="sec-card">
+          <div class="sec-title"><Icon name="bulb" /> {{ t('Basics') }}</div>
+          <div class="field-grid">
+            <label class="field span-2"><span>{{ t('Name *') }}</span><input v-model="bundleForm.title" :placeholder="t('e.g. Starter Combo')" /></label>
+            <label class="field"><span>{{ t('Bundle price *') }}</span><input type="number" min="0" v-model.number="bundleForm.bundle_price" /></label>
+            <label class="field"><span>{{ t('Valid from') }}</span><input type="date" v-model="bundleForm.valid_from" /></label>
+            <label class="field"><span>{{ t('Valid to') }}</span><input type="date" v-model="bundleForm.valid_to" /></label>
+          </div>
+          <label class="inline-check">
+            <input type="checkbox" v-model="bundleForm.status" true-value="Active" false-value="Inactive" />
+            {{ t('Active') }}
+          </label>
+        </div>
+
+        <!-- Items -->
+        <div class="sec-card">
+          <div class="sec-title"><Icon name="store" /> {{ t('Items in the bundle') }}</div>
+          <p class="muted small" style="margin: 0 0 10px">
+            <b>{{ t('Allocated price') }}</b> {{ t('(optional) sets each component\'s share of the bundle price, useful to control margins per item. Fill all rows or none, they must sum exactly to the bundle price. Empty = split proportionally to regular prices.') }}
+          </p>
+          <div v-for="(row, i) in bundleForm.items" :key="i" class="item-row">
+            <LinkPicker
+              doctype="Item"
+              v-model="row.item_code"
+              :label="row.label"
+              :placeholder="t('Search by name, code or barcode…')"
+              @picked="(option) => (row.label = option?.item_name || option?.name || '')"
+            />
+            <input type="number" min="1" v-model.number="row.qty" style="width: 70px" :title="t('Qty')" />
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              v-model.number="row.allocated_amount"
+              style="width: 120px"
+              :placeholder="t('Alloc. price')"
+              :title="t('Allocated share of the bundle price (whole row)')"
+            />
+            <button class="btn-ghost" @click="bundleForm.items.splice(i, 1)"><Icon name="close" /></button>
+          </div>
+          <button class="btn btn-outline add-row" @click="bundleForm.items.push({ item_code: '', label: '', qty: 1, allocated_amount: null })">
+            {{ t('+ Add item') }}
+          </button>
+          <p v-if="allocationState === 'partial'" class="row-warning">
+            {{ t('⚠ Fill an allocated price on every row, or clear them all.') }}
+          </p>
+          <p v-else-if="allocationState === 'mismatch'" class="row-warning">
+            {{ t('⚠ Allocated prices sum to {sum} but the bundle price is {price}, they must match exactly.', { sum: money(allocationTotal), price: money(bundleForm.bundle_price || 0) }) }}
+          </p>
+          <p v-else-if="allocationState === 'ok'" class="muted small" style="color: var(--brand-dark)">
+            {{ t('✓ Allocations match the bundle price.') }}
+          </p>
+
+          <div class="sub-label">{{ t('Outlets') }}</div>
+          <ScopePicker v-model:company="bundleForm.company" v-model:outlets="bundleForm.pos_profiles" />
+        </div>
+
+        <!-- Sticky footer -->
+        <div class="editor-footer">
+          <button v-if="bundleForm.name && perms.bundles?.delete" class="btn btn-outline danger" @click="deleteBundle">{{ t('Delete') }}</button>
+          <span style="flex: 1" />
+          <button class="btn btn-outline" @click="editingBundle = false">{{ t('Cancel') }}</button>
+          <button
+            class="btn btn-primary"
+            :disabled="saving || !bundleForm.items.some((r) => r.item_code) || allocationState === 'partial' || allocationState === 'mismatch'"
+            @click="saveBundle"
+          >
+            {{ saving ? t('Saving…') : t('Save Bundle') }}
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PRICE BOOKS ============ -->
+    <section v-if="activeTab === 'Price Books'" class="tab-body">
+      <!-- LIST -->
+      <div v-if="!editingBook" class="list-view">
+        <div class="list-head">
+          <input v-model="bookSearch" class="list-search" :placeholder="t('Search price books…')" />
+          <button v-if="perms.price_books?.create" class="btn btn-primary" @click="newBook">{{ t('+ New Price Book') }}</button>
+        </div>
+        <p class="muted hint-row">
+          {{ t('A price book gives a set of items a special price for a period, a discount off your normal selling price, for chosen outlets/customer groups. Highest priority wins, delivery-app prices override price books.') }}
+        </p>
+        <div v-if="!priceBooks.length" class="muted empty">{{ t('No price books yet') }}</div>
+        <div v-else class="card-list">
+          <button v-for="book in filteredBooks" :key="book.name" class="entity-card" @click="editBook(book)">
+            <span class="status-dot" :class="{ on: book.status === 'Active' }" />
+            <div class="entity-main">
+              <div class="entity-title">{{ book.title }}</div>
+              <div class="muted small entity-sub">
+                {{ t('{n} items · priority {p}', { n: (book.items || []).length, p: book.priority }) }}
+                <span v-if="book.customer_groups.length"> · {{ book.customer_groups.join(', ') }}</span>
+                <span v-if="book.valid_from || book.valid_to"> · {{ book.valid_from || '…' }} → {{ book.valid_to || '…' }}</span>
+              </div>
+            </div>
+            <span v-if="book.expired" class="status-pill expired">{{ t('Expired') }}</span>
+            <span class="status-pill" :class="{ on: book.status === 'Active' }">{{ t(book.status) }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- EDITOR -->
+      <div v-else class="editor">
+        <!-- Validity & scope -->
+        <div class="sec-card">
+          <div class="sec-title"><Icon name="bulb" /> {{ t('Validity & scope') }}</div>
+          <div class="field-grid">
+            <label class="field span-2"><span>{{ t('Name *') }}</span><input v-model="bookForm.title" /></label>
+            <label class="field"><span>{{ t('Priority') }}</span><input type="number" v-model.number="bookForm.priority" /></label>
+            <label class="field"><span>{{ t('Valid from') }}</span><input type="date" v-model="bookForm.valid_from" /></label>
+            <label class="field"><span>{{ t('Valid to') }}</span><input type="date" v-model="bookForm.valid_to" /></label>
+          </div>
+          <label class="inline-check" style="margin-bottom: 14px">
+            <input type="checkbox" v-model="bookForm.status" true-value="Active" false-value="Inactive" />
+            {{ t('Active') }}
+          </label>
+          <div class="sub-label">{{ t('Outlets & customers') }}</div>
+          <ScopePicker v-model:company="bookForm.company" v-model:outlets="bookForm.pos_profiles" />
+          <div class="item-row">
+            <LinkPicker
+              doctype="Customer Group"
+              v-model="groupPick"
+              :placeholder="t('Customer group… (empty = everyone)')"
+              @picked="(option) => addGroup(bookForm, option)"
+            />
+            <span v-for="(group, i) in bookForm.customer_groups" :key="group" class="chip-sm">
+              {{ group }} <button class="btn-ghost" @click="bookForm.customer_groups.splice(i, 1)"><Icon name="close" /></button>
+            </span>
+          </div>
+        </div>
+
+        <!-- Items -->
+        <div class="sec-card">
+          <div class="sec-title">
+            <span><Icon name="store" /> {{ t('Item prices') }}</span>
+          </div>
+          <p class="muted small" style="margin: 0 0 10px">
+            {{ t('These items sell at the price you set while the book is active, everything else keeps its normal price') }}
+          </p>
+          <div class="item-row">
+            <LinkPicker
+              doctype="Item"
+              v-model="bookItemPick"
+              :placeholder="t('+ Add item (name, code or barcode)…')"
+              @picked="addBookItem"
+            />
+            <button class="btn btn-outline" :disabled="!(bookForm.items || []).length" @click="exportBookItems">
+              <Icon name="download" /> {{ t('Export') }}
+            </button>
+            <button class="btn btn-outline" :disabled="bookImporting" @click="bookFileInput?.click()">
+              <Icon name="upload" /> {{ bookImporting ? t('Importing…') : t('Import Excel/CSV') }}
+            </button>
+            <input ref="bookFileInput" type="file" accept=".csv,.xlsx,.xlsm,.xls" style="display: none" @change="importBookItems" />
+          </div>
+          <!-- Bulk-add every item in a brand / item group / tag in one click -->
+          <div class="item-row">
+            <span class="muted small" style="white-space: nowrap">{{ t('Add all by') }}</span>
+            <select v-model="bookFetch.by" style="width: 120px" @change="bookFetch.value = ''; bookFetch.label = ''">
+              <option value="Brand">{{ t('Brand') }}</option>
+              <option value="Item Group">{{ t('Item Group') }}</option>
+              <option value="Tag">{{ t('Tag') }}</option>
+            </select>
+            <LinkPicker
+              :doctype="bookFetch.by"
+              v-model="bookFetch.value"
+              :label="bookFetch.label"
+              :placeholder="t('Pick a brand / group / tag…')"
+              @picked="(option) => (bookFetch.label = option?.name || option?.item_name || '')"
+            />
+            <button class="btn btn-outline" :disabled="!bookFetch.value || bookFetching" @click="fetchBookItems">
+              {{ bookFetching ? t('Adding…') : t('Add matching') }}
+            </button>
+          </div>
+          <div v-if="bookImportReport" class="import-report">
+            <div class="gate-ok">{{ t('✓ Imported {n} item(s)', { n: bookImportReport.added }) }}</div>
+            <div v-for="(err, i) in bookImportReport.errors" :key="i" class="gate-bad">⚠ {{ err }}</div>
+            <button class="btn-ghost dismiss" @click="bookImportReport = null">{{ t('Dismiss') }}</button>
+          </div>
+          <!-- Discount every book price at once, with optional rounding -->
+          <div v-if="(bookForm.items || []).length" class="item-row bulk-adjust">
+            <span class="muted small" style="white-space: nowrap">{{ t('Discount all prices by') }}</span>
+            <input type="number" min="0" max="100" step="0.5" v-model.number="bookBulk.percent" style="width: 80px" />
+            <span class="muted small">%</span>
+            <span class="muted small">{{ t('round to') }}</span>
+            <select v-model="bookBulk.round" style="width: 120px">
+              <option value="0">{{ t('No rounding') }}</option>
+              <option value="0.05">0.05</option>
+              <option value="0.25">0.25</option>
+              <option value="0.5">0.50</option>
+              <option value="1">1</option>
+              <option value="5">5</option>
+            </select>
+            <button class="btn btn-outline" @click="applyBulkDiscount">{{ t('Apply to all') }}</button>
+          </div>
+          <table class="price-table" v-if="(bookForm.items || []).length">
+            <thead>
+              <tr><th>{{ t('Item') }}</th><th class="right">{{ t('Book price') }}</th><th></th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, i) in bookForm.items" :key="i">
+                <td>
+                  <div class="price-item-name">{{ row.item_name || row.item_code }}</div>
+                  <div class="muted small mono">{{ row.item_code }}</div>
+                </td>
+                <td class="right">
+                  <input type="number" min="0" step="0.01" class="price-input" v-model.number="row.rate" />
+                </td>
+                <td><button class="btn-ghost" :title="t('Remove')" @click="bookForm.items.splice(i, 1)"><Icon name="close" /></button></td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-else class="muted" style="padding: 8px 0 4px">
+            {{ t('No items yet. Add an item above or import an Excel/CSV file. Items not listed keep their normal selling price.') }}
+          </div>
+        </div>
+
+        <!-- Sticky footer -->
+        <div class="editor-footer">
+          <button v-if="bookForm.name && perms.price_books?.delete" class="btn btn-outline danger" @click="deleteBook">{{ t('Delete') }}</button>
+          <span style="flex: 1" />
+          <button class="btn btn-outline" @click="editingBook = false">{{ t('Cancel') }}</button>
+          <button class="btn btn-primary" :disabled="saving" @click="saveBook">
+            {{ saving ? t('Saving…') : t('Save Price Book') }}
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ LOYALTY & GIFT CARDS ============ -->
+    <section v-if="activeTab === 'Loyalty & Gift Cards'" class="tab-body">
+      <!-- Loyalty -->
+      <div class="sec-card">
+        <div class="sec-title"><Icon name="star" /> {{ t('Loyalty program') }}</div>
+        <p class="muted hint-row" style="padding: 0">
+          {{ t('Earning is automatic on every sale once a program exists (auto opt-in covers all customers). Redemption appears in the payment screen when the customer has points. Points expense posts to the configured expense account.') }}
+        </p>
+        <div v-if="!loyaltyPrograms.length && !creatingLoyalty" class="muted empty">
+          {{ t('No loyalty program yet') }}
+          <div style="margin-top: 10px">
+            <button v-if="perms.loyalty" class="btn btn-primary" @click="creatingLoyalty = true">{{ t('+ Create program') }}</button>
+          </div>
+        </div>
+        <div v-for="program in loyaltyPrograms" :key="program.name" class="info-row">
+          <div class="row-title"><Icon name="star" /> {{ program.loyalty_program_name }}</div>
+          <div v-if="companies.length > 1" class="muted small">{{ t('Redeemed at the outlets of {company}', { company: program.company }) }}</div>
+          <div class="muted small">
+            {{ t('Earn 1 point per {factor} spent', { factor: program.collection_factor }) }} ·
+            {{ t('1 point = {value}', { value: program.conversion_factor }) }} ·
+            {{ program.expiry_duration ? t('points expire after {days} days', { days: program.expiry_duration }) : t('points never expire') }} ·
+            {{ program.auto_opt_in ? t('all customers') : t('manual enrollment') }}
+          </div>
+        </div>
+        <div v-if="loyaltyPrograms.length && perms.loyalty && !creatingLoyalty" class="editor-actions">
+          <button class="btn btn-outline" @click="creatingLoyalty = true">{{ t('+ Another program') }}</button>
+          <span style="flex: 1" />
+        </div>
+
+        <div v-if="creatingLoyalty" class="loyalty-editor">
+          <div class="field-grid">
+            <label class="field span-2"><span>{{ t('Program name *') }}</span><input v-model="loyaltyForm.name" :placeholder="t('e.g. Rewards')" /></label>
+            <label v-if="companies.length > 1" class="field span-2">
+              <span>{{ t('Company') }}</span>
+              <select v-model="loyaltyForm.company" @change="loyaltyForm.expense_account = ''">
+                <option v-for="c in companies" :key="c" :value="c">{{ c }}</option>
+              </select>
+              <span class="muted small">{{ t('ERPNext keeps a loyalty program to one company: points are earned at any outlet and redeemed only at this company\'s. For a reward every company of the group honours, use cashback.') }}</span>
+            </label>
+            <label class="field">
+              <span>{{ t('Earn: 1 point per … spent *') }}</span>
+              <input type="number" min="0.01" step="0.01" v-model.number="loyaltyForm.spend_per_point" />
+            </label>
+            <label class="field">
+              <span>{{ t('Redeem: 1 point = … *') }}</span>
+              <input type="number" min="0.01" step="0.01" v-model.number="loyaltyForm.point_value" />
+            </label>
+            <label class="field">
+              <span>{{ t('Points expire after (days, 0 = never)') }}</span>
+              <input type="number" min="0" v-model.number="loyaltyForm.expiry_days" />
+            </label>
+            <label class="field">
+              <span>{{ t('Expense account (empty = auto-create)') }}</span>
+              <LinkPicker
+                :key="'lpx-' + loyaltyForm.company"
+                doctype="Account"
+                :filters="{ company: loyaltyForm.company, root_type: 'Expense' }"
+                v-model="loyaltyForm.expense_account"
+                :placeholder="t('Loyalty Points Expense…')"
+              />
+            </label>
+          </div>
+          <div class="editor-actions">
+            <span style="flex: 1" />
+            <button class="btn btn-outline" @click="creatingLoyalty = false">{{ t('Cancel') }}</button>
+            <button class="btn btn-primary" :disabled="saving || !loyaltyForm.name" @click="saveLoyalty">
+              {{ saving ? t('Creating…') : t('Create Program') }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gift cards -->
+      <div class="sec-card">
+        <div class="sec-title"><Icon name="gift" /> {{ t('Gift cards') }}</div>
+        <p class="muted hint-row" style="padding: 0">
+          {{ t('Sell cards from the gift-card button on the sell screen (money goes to the Gift Cards liability account, no tax until the card is spent). Redeem them as a payment method. Default expiry:') }}
+          <b>{{ settingsInfo.gift_card_expiry_days ? t('{days} days', { days: settingsInfo.gift_card_expiry_days }) : t('never') }}</b>
+          {{ t('(change it in the General tab).') }}
+        </p>
+        <div class="item-row">
+          <input v-model="giftCardSearch" :placeholder="t('Search cards by number or customer…')" @input="debouncedLoadCards" style="max-width: 280px" />
+        </div>
+        <div v-if="!giftCardList.length" class="muted empty">{{ t('No gift cards yet') }}</div>
+        <div v-for="card in giftCardList" :key="card.card_no" class="info-row gc-row">
+          <div>
+            <div class="row-title mono">{{ card.card_no }}</div>
+            <div class="muted small">
+              {{ t('{balance} of {initial} left', { balance: money(card.balance), initial: money(card.initial_amount) }) }}<span v-if="card.customer"> · {{ card.customer }}</span><span v-if="card.expiry_date"> · {{ t('expires {date}', { date: card.expiry_date }) }}</span><span v-if="companies.length > 1 && card.company"> · {{ card.company }}</span>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center">
+            <span class="status-pill" :class="{ on: card.status === 'Active' }">{{ t(card.status) }}</span>
+            <button v-if="card.status === 'Active' && perms.gift_cards" class="btn-ghost" :title="t('Disable card')" @click="disableCard(card)"><Icon name="ban" /></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CHANNELS & GENERAL ============ -->
+    <section v-if="activeTab === 'General'" class="tab-body">
+      <!-- General holds every shop-wide setting, so it is split into groups the
+           same way the tabs on the left split the rest. One group shows at a
+           time; the Save button at the bottom saves them all. -->
+      <div class="gen-nav">
+        <button
+          v-for="group in generalSections"
+          :key="group.key"
+          class="gen-nav-btn"
+          :class="{ active: generalSection === group.key }"
+          @click="generalSection = group.key"
+        >
+          <Icon :name="group.icon" /> {{ t(group.label) }}
+        </button>
+      </div>
+      <!-- Holds and deposits -->
+      <div class="sec-card" v-show="generalSection === 'holds'">
+        <div class="sec-title"><Icon name="bookmark" /> {{ t('Holds and deposits') }}</div>
+        <p class="sec-note">{{ t('Goods put aside for a customer who pays for them over time, and how the money they hand over is treated until the goods leave the shop.') }}</p>
+        <div class="setting-list">
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.enable_layaway" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Enable holds and deposits') }}</span>
+              <span class="setting-desc">{{ t('Off: the till shows nothing about holds, no button and no screen. A shop that never puts goods aside for a customer does not need it.') }}</span>
+            </span>
+          </label>
+          <label class="setting-row" v-if="generalForm.enable_layaway">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.layaway_reserve_stock" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Reserve the goods on hold') }}</span>
+              <span class="setting-desc">{{ t('Raises a Sales Order, so ERPNext shows the quantity as reserved and another till cannot sell the last one.') }}</span>
+            </span>
+          </label>
+          <label class="setting-row" v-if="generalForm.enable_layaway">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.deposit_with_tax" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Deposits are taxable when taken') }}</span>
+              <span class="setting-desc">{{ t('Off (the default): the deposit carries no tax and the goods are taxed in full at hand-over. On: the deposit is taxed the moment it is taken, and that tax is deducted at hand-over instead of charged twice.') }}</span>
+            </span>
+          </label>
+        </div>
+        <p v-if="!generalForm.enable_layaway && session.settings.open_holds" class="muted hint-row" style="margin-top: 12px">
+          {{ t('{n} holds are still open. The screen stays until they are handed over or cancelled, because that money and those goods belong to someone.', { n: session.settings.open_holds }) }}
+        </p>
+        <div class="field-grid" v-if="generalForm.enable_layaway" style="margin-top: 16px">
+          <label class="field">
+            <span>{{ t('Hold goods for (days)') }}</span>
+            <input type="number" min="0" v-model.number="generalForm.layaway_days" />
+            <span class="setting-desc">{{ t('0 = no limit. Nothing is cancelled automatically: the till flags a hold that runs past its date, a person decides.') }}</span>
+          </label>
+          <label class="field">
+            <span>{{ t('Minimum deposit (%)') }}</span>
+            <input type="number" min="0" max="100" v-model.number="generalForm.layaway_min_percent" />
+            <span class="setting-desc">{{ t('The smallest first payment the shop accepts, as a share of the total. 0 = any amount.') }}</span>
+          </label>
+        </div>
+      </div>
+      <!-- Restaurant: tables and open orders -->
+      <div class="sec-card" v-show="generalSection === 'restaurant'">
+        <div class="sec-title"><Icon name="table" /> {{ t('Restaurant') }}</div>
+        <p class="sec-note">{{ t('Tables and orders that stay open while the guests eat, then become one ordinary sale at the end.') }}</p>
+        <p class="muted hint-row">
+          <template v-if="session.restaurantMode">{{ t('This outlet serves tables.') }}</template>
+          <template v-else>{{ t('This outlet does not serve tables yet. Switch it on per outlet: ERP, POS Profile, Lumen Restaurants, Run this outlet as a restaurant.') }}</template>
+        </p>
+        <div class="sub-label">{{ t('Tables at {outlet}', { outlet: session.posProfile }) }}</div>
+        <div v-if="!tables.length" class="muted small" style="padding-bottom: 8px">{{ t('No tables yet.') }}</div>
+        <div v-for="(row, i) in tables" :key="row.name || 'new' + i" class="table-row">
+          <input v-model="row.table_no" :placeholder="t('Table')" />
+          <input v-model="row.area" :placeholder="t('Area')" />
+          <input type="number" min="0" v-model.number="row.seats" :placeholder="t('Seats')" />
+          <label class="table-off">
+            <input type="checkbox" v-model="row.disabled" :true-value="1" :false-value="0" />
+            <span class="muted small">{{ t('Out of service') }}</span>
+          </label>
+          <button class="btn-ghost" :title="t('Remove')" @click="removeTable(i)"><Icon name="close" /></button>
+        </div>
+        <div class="add-row">
+          <button class="btn btn-outline" @click="addTable">+ {{ t('Add a table') }}</button>
+          <button class="btn btn-primary" :disabled="savingTables" @click="saveTables">
+            {{ savingTables ? t('Saving…') : t('Save tables') }}
+          </button>
+        </div>
+        <p class="muted hint-row" style="margin-top: 10px">
+          {{ t('A table that is out of service keeps its history and disappears from the floor screen.') }}
+        </p>
+        <!-- Lumen Restaurants: the outlet's floor plan switch (0.1.0-r14). -->
+        <FloorSettings v-if="session.restaurantMode && generalSection === 'restaurant'" />
+        <!-- Lumen Restaurants: the outlet's add-on switches. -->
+        <AddonSettings v-if="session.restaurantMode && generalSection === 'restaurant'" />
+
+        <div class="sub-label">{{ t('Public booking page') }}</div>
+        <p class="muted hint-row">
+          {{ t('A page customers book from, designed to look like the restaurant: colours, background, font, your own questions and packages like a buffet. Share its link on social media or the website.') }}
+        </p>
+        <button class="btn btn-primary" @click="$router.push('/booking-designer')">{{ t('Design the booking page') }}</button>
+      </div>
+      <!-- Sales on account (lumen_restaurants.credit_sales, 0.60.0) -->
+      <div class="sec-card" v-show="generalSection === 'credit'" data-tour="settings-credit">
+        <div class="sec-title"><Icon name="clock" /> {{ t('Sales on account') }}</div>
+        <p class="sec-note">{{ t('A customer takes the goods now and pays later, all of it, or the rest after paying part.') }}</p>
+        <div class="setting-list">
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.credit_sales_enabled" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Sell on account') }}</span>
+              <span class="setting-desc">{{ t('Off (the default): the till shows nothing about it.') }}</span>
+            </span>
+          </label>
+        </div>
+        <template v-if="generalForm.credit_sales_enabled">
+          <div class="field-grid" style="margin-top: 16px">
+            <label class="field">
+              <span>{{ t('Who can buy on account') }}</span>
+              <select v-model="generalForm.credit_customers">
+                <option value="Customers allowed on their card">{{ t('Only customers allowed on their card') }}</option>
+                <option value="Any named customer">{{ t('Any named customer') }}</option>
+              </select>
+              <span class="setting-desc">{{ t("Never the walk-in customer. A customer is allowed on their card in Customers, by whoever may set a customer's credit.") }}</span>
+            </label>
+            <label class="field">
+              <span>{{ t('Default credit limit') }}</span>
+              <input type="number" min="0" step="0.01" v-model.number="generalForm.credit_default_limit" />
+              <span class="setting-desc">{{ t("For a customer with no credit limit of their own in ERPNext (on the customer, its group or the company), in the company's currency. 0 = no limit.") }}</span>
+            </label>
+          </div>
+          <div class="how-box">
+            <div class="how-title">{{ t('How it works') }}</div>
+            <ol class="how-list">
+              <li>{{ t('At the payment screen, Put on account pays what the customer does not pay now. The sale is a POS invoice like any other.') }}</li>
+              <li>{{ t('At that moment the till books the debt on the customer in ERPNext, one Journal Entry per sale, so it shows on their account and in Accounts Receivable at once.') }}</li>
+              <li>{{ t('The till refuses a sale that would take the customer past their credit limit. Raise the limit on their card to allow more.') }}</li>
+              <li>{{ t('The customer pays later at the till (Customers, Take a payment) or in ERPNext. One payment can settle several sales, the oldest first.') }}</li>
+              <li>{{ t('A return of a sale still owing comes off the debt first, and only the rest goes back as money.') }}</li>
+              <li>{{ t('At the close, what was sold on account is shown but not counted, and the payments taken are in the drawer.') }}</li>
+            </ol>
+            <p class="muted small" style="margin: 0">{{ t("Who may sell on account, take customer payments and set a customer's credit is set in Approvals and access, Permissions. Until someone is named there, only managers can.") }}</p>
+          </div>
+          <div class="credit-setup">
+            <div class="sub-label">{{ named(t('Set up by LumenPOS')) }}</div>
+            <div v-for="row in settingsInfo.credit_setup || []" :key="row.company" class="credit-setup-row">
+              <bdi class="credit-company">{{ row.company }}</bdi>
+              <span v-if="row.ready" class="muted small">{{ t('Payment method {mode}, account {account}', { mode: row.mode, account: row.account }) }}</span>
+              <span v-else-if="row.clash" class="credit-clash small">{{ t('A payment method named {mode} already exists, on account {account}. Rename it in ERPNext, then save again.', { mode: row.mode, account: row.account }) }}</span>
+              <span v-else class="muted small">{{ t('Set up when you save') }}</span>
+            </div>
+          </div>
+        </template>
+      </div>
+      <!-- Delivery apps -->
+      <div class="sec-card" v-show="generalSection === 'payments'">
+        <div class="sec-title"><Icon name="bike" /> {{ t('Delivery apps') }}</div>
+        <p class="sec-note">{{ t('Sales that arrive from a delivery app, and the rules each payment method follows at the till.') }}</p>
+        <p class="muted hint-row" style="padding: 0">
+          {{ t('Sales can be tagged with the delivery app they came through. Each app can require an order ID and use its own price list. Give an app its own list and tap') }} <b>{{ t('Edit prices') }}</b> {{ t('to set prices for that app only (e.g. Jahez prices). An app\'s price list overrides every price book.') }}
+        </p>
+        <div v-for="(app, i) in generalForm.delivery_apps" :key="i" class="app-block">
+          <div class="item-row">
+            <input v-model="app.app_name" :placeholder="t('App name (e.g. Jahez)')" />
+            <LinkPicker doctype="Price List" v-model="app.price_list" :placeholder="t('Price list (optional)')" />
+            <button class="btn-ghost new-pl" :title="t('Create a price list for this app')" @click="newAppPriceList(app)">{{ t('+ new') }}</button>
+            <label class="inline-check">
+              <input type="checkbox" v-model="app.require_order_id" :true-value="1" :false-value="0" />
+              {{ t('Order ID required') }}
+            </label>
+            <button
+              v-if="app.price_list"
+              class="btn btn-outline"
+              @click="expandedAppIdx = expandedAppIdx === i ? -1 : i"
+            >
+              {{ expandedAppIdx === i ? t('Hide prices') : t('Edit prices') }}
+            </button>
+            <button class="btn-ghost" @click="generalForm.delivery_apps.splice(i, 1)"><Icon name="close" /></button>
+          </div>
+          <PriceListEditor
+            v-if="expandedAppIdx === i && app.price_list && !isProtected(app.price_list)"
+            :key="app.price_list"
+            :price-list="app.price_list"
+            :compare-list="session.priceList"
+            :can-manage="perms.edit_item_prices"
+          />
+          <div v-else-if="expandedAppIdx === i && isProtected(app.price_list)" class="dedicated-hint warn">
+            <b>{{ t('“{list}” is a base selling list', { list: app.price_list }) }}</b>. {{ t('Set a dedicated list for this app (＋ new) so its prices don\'t change your normal selling prices.') }}
+          </div>
+        </div>
+        <div class="sub-label" style="margin-top: 18px">{{ t('Payment Methods') }}</div>
+        <p class="muted small" style="margin: 0 0 8px">
+          {{ t('Require a terminal or transfer reference on a method so a disputed payment can be traced later. Blocking a method for certain products is set up in POS Payment Restriction.') }}
+        </p>
+        <div v-for="(rule, i) in generalForm.payment_method_rules" :key="'pmr' + i" class="cf-row">
+          <LinkPicker doctype="Mode of Payment" v-model="rule.mode_of_payment" :placeholder="t('Method')" />
+          <label class="inline-check">
+            <input type="checkbox" v-model="rule.require_reference" :true-value="1" :false-value="0" />
+            {{ t('Require reference') }}
+          </label>
+          <input class="cf-in cf-field" v-model="rule.reference_label" :placeholder="t('Label, e.g. Approval code')" />
+          <button class="btn-ghost" @click="generalForm.payment_method_rules.splice(i, 1)"><Icon name="close" /></button>
+        </div>
+        <button class="btn btn-outline add-row" @click="generalForm.payment_method_rules.push({ mode_of_payment: '', require_reference: 1, reference_label: '' })">
+          <Icon name="plus" /> {{ t('Add a payment rule') }}
+        </button>
+
+        <button class="btn btn-outline add-row" @click="generalForm.delivery_apps.push({ app_name: '', price_list: '', require_order_id: 1 })">
+          {{ t('+ Add delivery app') }}
+        </button>
+      </div>
+
+      <!-- Companies of the group (lumen_restaurants.inter_company) -->
+      <div class="sec-card" v-show="generalSection === 'companies'">
+        <div class="sec-title"><Icon name="company" /> {{ t('Customer balances across companies') }}</div>
+        <p class="sec-note">{{ t('Gift cards, cashback and store credit, on a site with more than one company. Shared: a customer spends their balance at any company of the group that keeps its books in the same currency, and each company\'s books are kept right by an Inter Company Journal Entry. Separate: a balance is spent only at the company that issued it.') }}</p>
+        <p v-if="companies.length < 2" class="muted small">{{ t('This site has one company, so this applies once a second company has outlets.') }}</p>
+        <div class="segmented" style="margin: 6px 0 10px">
+          <button
+            v-for="opt in BALANCE_MODES"
+            :key="opt"
+            class="seg-btn"
+            :class="{ on: generalForm.balances_across_companies === opt }"
+            @click="generalForm.balances_across_companies = opt"
+          >
+            {{ t(opt) }}
+          </button>
+        </div>
+        <p class="muted small">{{ t('Companies with different currencies never share a balance.') }}</p>
+      </div>
+      <div class="sec-card" v-show="generalSection === 'companies'">
+        <div class="sec-title"><Icon name="bank" /> {{ t('Entries between companies') }}</div>
+        <p class="sec-note">{{ t('When a balance issued by one company is spent at another, the two are settled once a day with one Inter Company Journal Entry pair per pair of companies and kind of balance. The accounts are set per company under Accounts and gift cards.') }}</p>
+        <div v-if="!icStatus" class="muted small">{{ t('Loading…') }}</div>
+        <template v-else>
+          <div v-if="!icStatus.pending.length" class="muted small">{{ t('Nothing is waiting to be booked.') }}</div>
+          <div v-else class="ic-wrap"><table class="ic-table">
+            <thead>
+              <tr><th>{{ t('Issued by') }}</th><th>{{ t('Spent at') }}</th><th>{{ t('Balance') }}</th><th class="right">{{ t('Amount') }}</th><th>{{ t('Since') }}</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in icStatus.pending" :key="row.from_company + row.to_company + row.wallet">
+                <td>{{ row.from_company }}</td>
+                <td>{{ row.to_company }}</td>
+                <td>{{ t(row.wallet) }}</td>
+                <td class="right">{{ money(row.amount, icStatus.companies[row.from_company]) }}</td>
+                <td>
+                  {{ row.since }}
+                  <div v-if="row.error" class="neg small">{{ row.error }}</div>
+                </td>
+              </tr>
+            </tbody>
+          </table></div>
+          <button
+            class="btn btn-outline"
+            style="margin-top: 10px"
+            :disabled="icBusy || !icStatus.pending.length"
+            @click="bookInterCompany"
+          >
+            {{ icBusy ? t('Booking…') : t('Book now') }}
+          </button>
+          <div v-if="icStatus.recent.length" class="sub-label">{{ t('Latest entries') }}</div>
+          <div v-if="icStatus.recent.length" class="ic-wrap"><table class="ic-table">
+            <thead>
+              <tr><th>{{ t('Date') }}</th><th>{{ t('Issued by') }}</th><th>{{ t('Spent at') }}</th><th>{{ t('Balance') }}</th><th class="right">{{ t('Amount') }}</th><th>{{ t('Entries') }}</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in icStatus.recent" :key="row.to_journal_entry">
+                <td>{{ row.posting_date }}</td>
+                <td>{{ row.from_company }}</td>
+                <td>{{ row.to_company }}</td>
+                <td>{{ t(row.wallet) }}</td>
+                <td class="right">{{ money(row.amount, icStatus.companies[row.from_company]) }}</td>
+                <td class="ic-links">
+                  <a :href="`/app/journal-entry/${row.to_journal_entry}`" target="_blank">{{ row.to_journal_entry }}</a>
+                  <a :href="`/app/journal-entry/${row.from_journal_entry}`" target="_blank">{{ row.from_journal_entry }}</a>
+                </td>
+              </tr>
+            </tbody>
+          </table></div>
+        </template>
+      </div>
+
+      <!-- The new-customer form (lumen_restaurants.customer_form) -->
+      <div class="sec-card" v-show="generalSection === 'customers'">
+        <div class="sec-title"><Icon name="person" /> {{ t('New customer form') }}</div>
+        <p class="sec-note">{{ t('What the till asks when a cashier adds a customer. Each field can be hidden, optional or required, for individuals and for companies apart. The address is the Saudi national address. A shop elsewhere can keep only the parts it needs.') }}</p>
+        <div class="cf-table">
+          <div class="cf-head">
+            <span>{{ t('Field') }}</span>
+            <span>{{ t('Individual customers') }}</span>
+            <span>{{ t('Company customers') }}</span>
+            <span></span>
+          </div>
+          <div class="cf-line">
+            <span class="cf-name">{{ t('Name') }}</span>
+            <select disabled><option>{{ t('Required') }}</option></select>
+            <select disabled><option>{{ t('Required') }}</option></select>
+            <span></span>
+          </div>
+          <div v-for="(row, i) in generalForm.customer_form_fields" :key="row.fieldname" class="cf-line">
+            <span class="cf-name">
+              {{ t(row.label) }}
+              <span v-if="!row.builtin" class="muted small">{{ row.fieldname }}</span>
+            </span>
+            <select v-model="row.for_individuals">
+              <option v-for="s in FORM_STATES" :key="s" :value="s">{{ t(s) }}</option>
+            </select>
+            <select v-model="row.for_companies">
+              <option v-for="s in FORM_STATES" :key="s" :value="s">{{ t(s) }}</option>
+            </select>
+            <button v-if="!row.builtin" class="btn-ghost" :title="t('Remove')" @click="generalForm.customer_form_fields.splice(i, 1)">
+              <Icon name="close" />
+            </button>
+            <span v-else></span>
+          </div>
+        </div>
+        <div class="cf-add">
+          <select v-model="customerFieldToAdd" @focus="loadCustomerFieldChoices">
+            <option value="">{{ t('Add a field of Customer…') }}</option>
+            <option v-for="f in customerFieldChoicesLeft" :key="f.fieldname" :value="f.fieldname">
+              {{ f.label }} ({{ f.fieldname }})
+            </option>
+          </select>
+          <button class="btn btn-outline" :disabled="!customerFieldToAdd" @click="addCustomerField">
+            <Icon name="plus" /> {{ t('Add') }}
+          </button>
+        </div>
+        <p class="muted small" style="margin-top: 8px">
+          {{ t('Your own Customer fields appear here too, for example a national ID or a commercial registration number. The mobile is how the till finds a customer it already has: without it, the same person can be added twice.') }}
+        </p>
+      </div>
+
+      <!-- Other currencies (lumen_restaurants.currency) -->
+      <div class="sec-card" v-show="generalSection === 'currencies'">
+        <div class="sec-title"><Icon name="cash" /> {{ t('Other currencies') }}</div>
+        <p class="sec-note">{{ t('Sell to customers who pay in another currency. A customer whose Billing Currency in ERPNext is another currency buys in it, and a walk-in can be switched to it at the till. Prices, offers and discounts stay in the outlet currency and are converted at the rate of the shift.') }}</p>
+        <div class="setting-list">
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.enable_multi_currency" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Sell in other currencies') }}</span>
+              <span class="setting-desc">{{ t('Off: a customer billed in another currency is refused at the till, with the reason.') }}</span>
+            </span>
+          </label>
+          <label v-if="generalForm.enable_multi_currency" class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.auto_rates_enabled" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Update exchange rates automatically') }}</span>
+              <span class="setting-desc">{{ t('Once a day, from ExchangeRate-API (free), for the currencies set to Automatic below. The others keep the rate you set. A rate you type for today always wins.') }}</span>
+            </span>
+          </label>
+        </div>
+        <template v-if="generalForm.enable_multi_currency">
+          <div class="sub-label">{{ t('Currencies the till sells in') }}</div>
+          <p class="muted small" style="margin: 0 0 8px">
+            {{ t('Each currency gets, on saving, a walk-in customer billed in it, a receivable account and a cash drawer ("Cash USD") on every outlet. Change is given in the local currency from the main drawer, or, for a currency set to give change in itself, from its own drawer. An outlet whose POS Profile names its own Account for Change Amount keeps it.') }}
+          </p>
+          <!-- One block per currency: what the till does with it, then its
+               rate and what was set up for it, then the automatic rate. -->
+          <div v-for="(row, i) in generalForm.sale_currencies" :key="'cur' + i" class="cur-block">
+          <div class="cf-row">
+            <LinkPicker class="cur-pick" doctype="Currency" v-model="row.currency" :placeholder="t('Currency, e.g. USD')" />
+            <label class="inline-check">
+              <input type="checkbox" v-model="row.show_equivalent" :true-value="1" :false-value="0" />
+              {{ t('Show the equivalent at the till') }}
+            </label>
+            <label class="inline-check">
+              <input type="checkbox" v-model="row.change_in_currency" :true-value="1" :false-value="0" />
+              {{ row.currency ? t('Give change in {currency}', { currency: row.currency }) : t('Give change in this currency') }}
+            </label>
+            <button class="btn-ghost cur-remove" @click="generalForm.sale_currencies.splice(i, 1)"><Icon name="close" /></button>
+          </div>
+          <div class="cf-row cur-sub">
+            <select v-if="generalForm.auto_rates_enabled" v-model="row.rate_source" class="cf-in rate-src">
+              <option value="Fixed">{{ t('Fixed rate') }}</option>
+              <option value="Automatic">{{ t('Automatic rate') }}</option>
+            </select>
+            <label v-if="generalForm.auto_rates_enabled && row.rate_source === 'Automatic'" class="inline-check margin-in" :title="t('The till values this currency this much below the published rate.')">
+              {{ t('Margin') }}
+              <input class="cf-in" type="number" min="0" max="99" step="0.1" v-model.number="row.rate_margin" />
+              %
+            </label>
+            <span v-if="row.walk_in_customer" class="muted small">{{ row.walk_in_customer }} · {{ row.cash_mode }}</span>
+            <span v-else-if="!row.setup_error" class="muted small">{{ t('Set up when you save') }}</span>
+            <span v-if="row.setup_error" class="neg small">{{ t('Could not set up: {reason}', { reason: row.setup_error }) }}</span>
+          </div>
+          <div v-if="generalForm.auto_rates_enabled && row.rate_source === 'Automatic' && row.currency" class="auto-status">
+            <span v-if="!Object.keys(row.auto_status || {}).length" class="muted small">{{ t('Not updated yet: save, or press Update now.') }}</span>
+            <span v-for="(st, base) in row.auto_status || {}" :key="base" :class="st.error ? 'neg small' : 'muted small'">
+              <template v-if="st.error">{{ t('Last update failed: {reason}. The till keeps the last rate.', { reason: st.error }) }}</template>
+              <template v-else>
+                {{ t('Published {published}, in force {used}, updated {at}', { published: rateBoth(row.currency, base, st.published), used: rateBoth(row.currency, base, st.used), at: isolate(shortTime(st.at)) }) }}<span v-if="st.wrote == null">&nbsp;· {{ t('a rate typed for today is in force') }}</span>
+              </template>
+            </span>
+          </div>
+          </div>
+          <button class="btn btn-outline add-row" @click="generalForm.sale_currencies.push({ currency: '', show_equivalent: 1, change_in_currency: 0, rate_source: 'Fixed', rate_margin: 0, auto_status: {} })">
+            <Icon name="plus" /> {{ t('Add a currency') }}
+          </button>
+
+          <div class="sub-label">{{ t('Exchange rates') }}</div>
+          <p class="muted small" style="margin: 0 0 8px">
+            {{ t('The selling rate from today on, kept in ERPNext (Currency Exchange). A shift keeps the rate it started selling at. The next shift takes the new one.') }}
+          </p>
+          <div v-if="!rateRows.length" class="muted small">{{ t('Save the currencies first, then set their rates here.') }}</div>
+          <p v-if="settingsInfo.auto_rates_enabled && rateRows.some((r) => r.auto)" class="muted small" style="margin: 0 0 8px">
+            {{ t('For a currency set to Automatic, a rate you save here counts for today only.') }}
+          </p>
+          <div v-for="r in rateRows" :key="r.currency + r.company_currency" class="cf-row">
+            <span class="rate-label">{{ isolate(`1 ${r.currency} =`) }}</span>
+            <input class="cf-in rate-in" type="text" inputmode="decimal" v-model="r.draft" />
+            <span>{{ r.company_currency }}</span>
+            <span v-if="r.auto" class="pill-auto small">{{ t('Automatic') }}</span>
+            <span v-if="!r.rate" class="neg small">{{ t('No rate yet: the till cannot sell in it') }}</span>
+            <button class="btn btn-outline" :disabled="r.busy" @click="saveRate(r)">{{ t('Save rate') }}</button>
+          </div>
+          <div v-if="settingsInfo.auto_rates_enabled" class="auto-actions">
+            <button class="btn btn-outline" :disabled="ratesBusy" :title="t('Uses the saved settings.')" @click="updateRatesNow">
+              {{ ratesBusy ? t('Updating…') : t('Update now') }}
+            </button>
+            <a v-if="settingsInfo.rates_credit" :href="settingsInfo.rates_credit.url" target="_blank" rel="noopener" class="muted small">{{ settingsInfo.rates_credit.text }}</a>
+          </div>
+        </template>
+      </div>
+
+      <!-- Register & Offline -->
+      <div class="sec-card" v-show="generalSection === 'register'">
+        <div class="sec-title"><Icon name="store" /> {{ t('Register & Offline') }}</div>
+        <p class="sec-note">{{ t('How a shift opens and closes, the alerts it sends, and what the till keeps for selling without a connection.') }}</p>
+        <div class="setting-list">
+          <label class="field span-2" style="display:block; margin-bottom: 10px">
+            <span class="setting-title">{{ t('A shift belongs to') }}</span>
+            <select v-model="generalForm.shift_scope" class="cf-in" style="width: 100%; margin-top: 4px">
+              <option value="Per cashier">{{ t('The cashier, each opens their own shift and sells only on it') }}</option>
+              <option value="Per outlet">{{ t('The outlet, one shift per register, any cashier sells on it') }}</option>
+            </select>
+            <span class="setting-desc">{{ t('Per cashier lets several people share one counter, each with their own drawer and Z-report. On ERPNext 16 an outlet sells with only one open shift, so there each cashier needs their own POS Profile.') }}</span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.one_shift_per_user" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('One open shift per person') }}</span>
+              <span class="setting-desc">{{ t('On: nobody opens a new shift while they still have one open at another outlet, they close it first. Off (the default): a person may hold shifts at several outlets at once, and the till only reminds them.') }}</span>
+            </span>
+          </label>
+          <!-- Only ERPNext 16 and later take sales on a shift opened the same
+               day alone (register.roll_day). -->
+          <label v-if="settingsInfo.same_day_shifts" class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.carry_shift_past_midnight" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Keep a shift open past midnight') }}</span>
+              <span class="setting-desc">{{ named(t('ERPNext 16 takes sales only on a shift opened the same day. On (the default): at the first sale after midnight LumenPOS closes the day in ERPNext and opens the next one by itself, and the shift carries on and is counted once, at its own close. Off: a shift from an earlier day has to be closed before it can sell again.')) }}</span>
+            </span>
+          </label>
+          <!-- lumen_restaurants.accounting_periods (0.58.1) -->
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.warn_locked_periods" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Warn about locked accounting periods') }}</span>
+              <span class="setting-desc">{{ t('When an ERPNext accounting period locks sales invoices, say so as a shift opens, and explain a close it stops. The system check lists such periods either way.') }}</span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.variance_alert_enabled" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Email an alert on a large closing variance') }}</span>
+              <span class="setting-desc">{{ t('Records and notifies, it never blocks the close.') }}</span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.overdue_alert_enabled" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Email an alert when a shift is left open') }}</span>
+              <span class="setting-desc">{{ t('A till is never closed automatically, a close without a real cash count is worthless.') }}</span>
+            </span>
+          </label>
+          <div v-if="generalForm.overdue_alert_enabled" class="field-grid" style="margin: 6px 0 12px">
+            <label class="field">
+              <span>{{ t('Notify role') }}</span>
+              <LinkPicker doctype="Role" v-model="generalForm.overdue_alert_role" :placeholder="t('e.g. LumenPOS Manager')" />
+            </label>
+            <label class="field">
+              <span>{{ t('Grace period (minutes)') }}</span>
+              <input type="number" min="0" v-model.number="generalForm.overdue_grace_minutes" />
+            </label>
+            <label class="field span-2">
+              <span>{{ t('Fallback: hours after opening (outlets with no schedule)') }}</span>
+              <input type="number" min="1" v-model.number="generalForm.overdue_alert_hours" />
+            </label>
+          </div>
+          <div v-if="generalForm.variance_alert_enabled" class="field-grid" style="margin: 6px 0 12px">
+            <label class="field">
+              <span>{{ t('Variance threshold') }}</span>
+              <input type="number" min="0" step="0.01" v-model.number="generalForm.variance_alert_threshold" />
+            </label>
+            <label class="field">
+              <span>{{ t('Notify role') }}</span>
+              <LinkPicker doctype="Role" v-model="generalForm.variance_alert_role" :placeholder="t('e.g. LumenPOS Manager')" />
+            </label>
+          </div>
+          <!-- A reason for a short or over at the close (lumen_restaurants.variance, 0.59.0). -->
+          <label class="field span-2" style="display:block; margin: 6px 0 10px">
+            <span class="setting-title">{{ t('Reason for a short or over') }}</span>
+            <select v-model="generalForm.variance_reason_mode" class="cf-in" style="width: 100%; margin-top: 4px">
+              <option value="Optional">{{ t('Optional, the cashier may give a reason') }}</option>
+              <option value="Required">{{ t('Required, the register does not close without one') }}</option>
+              <option value="Off">{{ t('Off, the till does not ask for a reason') }}</option>
+            </select>
+            <span class="setting-desc">{{ t('When a counted drawer is short or over at the close, the cashier writes a reason, or taps one from the list below, and can say what was done about it. Both stay with the shift and go in the variance email.') }}</span>
+          </label>
+          <div v-if="generalForm.variance_reason_mode !== 'Off'" class="vr-settings">
+            <label v-if="generalForm.variance_reason_mode === 'Required'" class="field" style="max-width: 320px; margin-bottom: 10px">
+              <span>{{ t('Ask only when the difference is more than (0 = any difference)') }}</span>
+              <input type="number" min="0" step="0.01" v-model.number="generalForm.variance_reason_threshold" />
+            </label>
+            <div class="sub-label">{{ t('Reasons for a short or over') }}</div>
+            <p class="muted hint-row" style="padding: 0 0 10px">{{ t('The cashier can also write a reason in their own words.') }}</p>
+            <div v-for="(r, i) in generalForm.variance_reasons" :key="'vr' + i" class="item-row">
+              <input
+                :value="shownReason(generalForm.variance_reasons[i])"
+                :placeholder="t('Reason (for example Counting mistake)')"
+                @input="generalForm.variance_reasons[i] = keptReason($event.target.value)"
+              />
+              <button class="btn-ghost" @click="generalForm.variance_reasons.splice(i, 1)"><Icon name="close" /></button>
+            </div>
+            <button class="btn btn-outline add-row" @click="generalForm.variance_reasons.push('')">{{ t('+ Add reason') }}</button>
+          </div>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.offline_stock_only" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Cache only in-stock items for offline use') }}</span>
+              <span class="setting-desc">{{ t('Smaller, faster cache, refresh the catalog after changing.') }}</span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.offline_returns" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Returns without a connection') }}</span>
+              <span class="setting-desc">{{ t('On (the default): without a connection, a sale this device made in the same shift can be taken back, refunded in cash or the way the customer paid, never to store credit, a gift card or cashback. The till works out the refund as ERPNext will, and the server checks it again when the connection is back.') }}</span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.background_upload" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Send queued sales in the background') }}</span>
+              <span class="setting-desc">{{ t('On (the default): sales and returns made without a connection are sent as soon as the network is back, even with the till closed, where the browser allows it (Chrome, Edge, Android). The till still sends them itself whenever it is open.') }}</span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.warn_unprotected_storage" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Warn when offline sales are not protected') }}</span>
+              <span class="setting-desc">{{ t('On (the default): the till shows a warning when the browser has not agreed to keep its offline data for good, which it may otherwise clear when space runs low, and asks the browser again on a tap.') }}</span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.show_out_of_stock" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Show out-of-stock items in the grid') }}</span>
+              <span class="setting-desc">{{ t('Off = the sell grid shows only products with stock (services always show).') }}</span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.serial_scan_only" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Require scanning for serial numbers') }}</span>
+              <span class="setting-desc">{{ t('Serial numbers must be scanned with a barcode scanner, manual typing is blocked. Turn off if no scanner is available.') }}</span>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Features -->
+      <div class="sec-card" v-show="generalSection === 'features'">
+        <div class="sec-title"><Icon name="bulb" /> {{ t('Features') }}</div>
+        <p class="sec-note">{{ t('Turn parts of the till on or off for everybody, and choose the one-tap favourites.') }}</p>
+        <p class="muted hint-row" style="padding: 0 0 6px">
+          {{ t('Turn till features on or off. Each control is independent.') }}
+        </p>
+        <div class="setting-list">
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.enable_order_discount" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Order-level (whole-cart) discount') }}</span>
+              <span class="setting-desc">{{ t('Adds one discount field on the cart, spread across every line. Still subject to the discount limit and edit-price role.') }}</span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.enable_price_checker" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Price / stock checker') }}</span>
+              <span class="setting-desc">{{ t('Adds a Price check button on the sell screen to look up an item\'s price and stock without selling it.') }}</span>
+            </span>
+          </label>
+          <label class="field span-2" style="display:block; margin: 6px 0 10px">
+            <span class="setting-title">{{ t('Salesperson at the till') }}</span>
+            <select v-model="generalForm.salesperson_mode" class="cf-in" style="width: 100%; margin-top: 4px">
+              <option value="Optional">{{ t('Optional, the cashier may pick who sold') }}</option>
+              <option value="Required">{{ t('Required, no sale without a salesperson') }}</option>
+              <option value="Off">{{ t('Off, the till does not ask') }}</option>
+            </select>
+            <span class="setting-desc">{{ t('Salespeople are ERPNext\'s Sales Persons. The salesperson is saved on the invoice with ERPNext\'s commission rate, and the Salespeople page shows sales, returns and commission per person. Required is checked on the server too.') }}</span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.enable_insights" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Insights page') }}</span>
+              <span class="setting-desc">{{ t('A statistics page for managers. With Lumen Reports installed it shows a full sales dashboard with filters.') }}</span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.enable_cashback" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Cashback') }}</span>
+              <span class="setting-desc">{{ t('Customers earn cashback on qualifying sales (set the rules in the Cashback tab) and spend it as a payment method later.') }}</span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.enable_xreport" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('X-report (mid-shift read)') }}</span>
+              <span class="setting-desc">{{ t('Adds an X-report button on the register screen, a read-only drawer snapshot that does NOT close the shift.') }}</span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.enable_service_charge" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Service charge / tip') }}</span>
+              <span class="setting-desc">{{ t('Adds a flat-percent charge to every sale, posted to the income account you choose below.') }}</span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.enable_quick_keys" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Quick keys / favourites') }}</span>
+              <span class="setting-desc">{{ t('Show a Favourites grid of one-tap items on the sell screen.') }}</span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.enable_email_receipt" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Email receipt') }}</span>
+              <span class="setting-desc">{{ t('Show an Email receipt button so a copy can be sent to the customer\'s email.') }}</span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.enable_customer_display" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Customer-facing display') }}</span>
+              <span class="setting-desc">{{ t('Adds a Display button on the sell screen that opens a second-screen window mirroring the cart for the customer.') }}</span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.enable_till_lock" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Lock screen (PIN to unlock)') }}</span>
+              <span class="setting-desc">{{ t('Lock the till behind a PIN. A manager always unlocks, others use a manager/approver PIN, so set a Master passcode or approver PIN below first.') }}</span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.enable_audit_log" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Audit log') }}</span>
+              <span class="setting-desc">{{ t('Record sensitive actions to the audit log (viewable in the Audit Log tab).') }}</span>
+            </span>
+          </label>
+        </div>
+        <div v-if="generalForm.enable_till_lock" class="field-grid" style="margin-top: 12px">
+          <label class="field">
+            <span>{{ t('Auto-lock after (minutes, 0 = manual only)') }}</span>
+            <input type="number" min="0" v-model.number="generalForm.auto_lock_minutes" />
+          </label>
+        </div>
+        <div v-if="generalForm.enable_service_charge" class="field-grid" style="margin-top: 12px">
+          <label class="field">
+            <span>{{ t('Service charge %') }}</span>
+            <input type="number" min="0" max="100" step="0.5" v-model.number="generalForm.service_charge_percent" />
+          </label>
+          <p class="muted small" style="align-self: end; padding-bottom: 8px">
+            {{ t('Set the income account per company under') }} <b>{{ t('Company accounts') }}</b>.
+          </p>
+        </div>
+        <template v-if="generalForm.enable_quick_keys">
+          <div class="sub-label" style="margin-top: 14px">{{ t('Favourite items (one-tap on the sell screen)') }}</div>
+          <div v-for="(row, i) in generalForm.quick_keys" :key="i" class="item-row">
+            <LinkPicker
+              doctype="Item"
+              v-model="row.item_code"
+              :label="row.label"
+              :placeholder="t('Search by name, code or barcode…')"
+              @picked="(option) => (row.label = row.label || option?.item_name || '')"
+            />
+            <input v-model="row.label" :placeholder="t('Button label (optional)')" style="max-width: 200px" />
+            <button class="btn-ghost" @click="generalForm.quick_keys.splice(i, 1)"><Icon name="close" /></button>
+          </div>
+          <button class="btn btn-outline add-row" @click="generalForm.quick_keys.push({ item_code: '', label: '' })">
+            {{ t('+ Add favourite') }}
+          </button>
+        </template>
+      </div>
+
+      <!-- Languages -->
+      <div class="sec-card" v-show="generalSection === 'languages'">
+        <div class="sec-title"><Icon name="globe" /> {{ t('Languages') }}</div>
+        <p class="sec-note">{{ t('The languages a cashier can pick from the top bar. The server answers in the language on the screen, ERPNext\'s own messages included.') }}</p>
+        <div class="setting-list">
+          <label v-for="l in LANGUAGES" :key="l.code" class="setting-row">
+            <input
+              type="checkbox"
+              class="setting-toggle"
+              :checked="languageOn(l.code)"
+              :disabled="l.code === 'en'"
+              @change="toggleLanguage(l.code, $event.target.checked)"
+            />
+            <span class="setting-text">
+              <span class="setting-title"><bdi :lang="l.code">{{ l.name }}</bdi></span>
+              <span v-if="l.code === 'en'" class="setting-desc">{{ t('Always offered: a text not translated yet shows in English.') }}</span>
+              <!-- The language's name in the language of the screen, when it differs. -->
+              <span v-else-if="t('lang:' + l.code) !== l.name" class="setting-desc">{{ t('lang:' + l.code) }}</span>
+            </span>
+          </label>
+        </div>
+        <p class="muted hint-row" style="margin-top: 12px">
+          {{ t('While every language is ticked, a language added by a later update is offered by itself.') }}
+        </p>
+      </div>
+
+      <!-- Help for staff (0.58.0) -->
+      <div class="sec-card" v-show="generalSection === 'help'">
+        <div class="sec-title"><Icon name="help" /> {{ t('Help for staff') }}</div>
+        <p class="sec-note">{{ t('Help on every screen of the till, in the language each person picks. It only shows and explains: nothing is sold or changed.') }}</p>
+        <div class="setting-list">
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.help_in_till" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Help in the till') }}</span>
+              <span class="setting-desc">{{ t('A ? button on every screen opens that screen\'s help, with short tours over the real buttons.') }}</span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.help_offer_tour" :true-value="1" :false-value="0" :disabled="!generalForm.help_in_till" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Offer the tour to new staff') }}</span>
+              <span class="setting-desc">{{ t('Someone who has not seen the help yet is offered a one-minute tour the first time they open the till.') }}</span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.help_whats_new" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Show what is new after an update') }}</span>
+              <span class="setting-desc">{{ t('After an update, each person sees once what is new for them, with a Show me where a tour exists.') }}</span>
+            </span>
+          </label>
+        </div>
+        <p class="muted hint-row" style="margin-top: 12px">
+          <button type="button" class="btn btn-outline" :disabled="!session.help.in_till" @click="help.startTour('basics')">
+            <Icon name="play" /> {{ t('Take the tour now') }}
+          </button>
+        </p>
+      </div>
+
+      <!-- Receipt -->
+      <div class="sec-card" v-show="generalSection === 'receipt'">
+        <div class="sec-title"><Icon name="image" /> {{ t('Receipt') }}</div>
+        <p class="sec-note">{{ t('What the receipt shows and how it prints, shared or per outlet.') }}</p>
+        <p class="muted hint-row" style="padding: 0 0 10px">
+          {{ t('Design the receipt shown on screen and printed from the browser.') }}
+        </p>
+        <div v-if="session.printFormat" class="pf-banner">
+          <Icon name="report" />
+          <div>
+            <b>{{ t('Your own format is active:') }} {{ session.printFormat }}</b>
+            <div class="pf-sub">{{ t('A Print Format is set on this POS Profile, so printing uses it, the design below only styles the on-screen receipt. Clear the POS Profile’s Print Format field to print with this designer instead.') }}</div>
+          </div>
+        </div>
+        <p v-else class="muted hint-row" style="padding: 0 0 12px">
+          {{ t('Want your own layout? Set a Print Format on this POS Profile in ERPNext (any standard or custom Print Format for the sale document), it then takes over printing, and this designer keeps styling the on-screen receipt.') }}
+        </p>
+        <div class="rc-scope">
+          <span class="rc-scope-label">{{ t('Editing receipt for') }}</span>
+          <select class="rc-scope-select" v-model="receiptScope" @change="onReceiptScopeChange">
+            <option value="">{{ t('All outlets (default)') }}</option>
+            <option v-for="p in posProfiles" :key="p" :value="p">
+              {{ p }}{{ profileReceiptOverrides.includes(p) ? '  •' : '' }}
+            </option>
+          </select>
+          <template v-if="receiptScope">
+            <button class="btn btn-primary" @click="saveProfileReceipt">{{ t('Save for this outlet') }}</button>
+            <button v-if="receiptHasOverride" class="btn btn-outline" @click="resetProfileReceipt">{{ t('Reset to default') }}</button>
+            <span class="rc-scope-hint muted small">{{ receiptHasOverride ? t('This outlet has its own receipt.') : t('Customising from the default. Save to apply.') }}</span>
+          </template>
+          <span v-else class="rc-scope-hint muted small">{{ t('Saved with the main Save button. Pick an outlet to give it a different receipt.') }}</span>
+        </div>
+        <div class="receipt-config">
+          <div class="rc-controls">
+            <div class="seg-field">
+              <span class="seg-label">{{ t('Template') }}</span>
+              <div class="segmented">
+                <button
+                  v-for="tpl in RECEIPT_TEMPLATES"
+                  :key="tpl"
+                  class="seg-btn"
+                  :class="{ on: receiptForm.receipt_template === tpl }"
+                  @click="receiptForm.receipt_template = tpl"
+                >
+                  {{ t(tpl) }}
+                </button>
+              </div>
+            </div>
+
+            <div class="field-grid" style="margin-top: 14px">
+              <label class="field span-2">
+                <span>{{ t('Logo URL or path') }}</span>
+                <input v-model="receiptForm.receipt_logo" :placeholder="t('/files/logo.png or https://…')" />
+              </label>
+              <label class="field span-2">
+                <span>{{ t('Header line (under the company name)') }}</span>
+                <input v-model="receiptForm.receipt_header" :placeholder="t('e.g. Main Branch · 0500000000')" />
+              </label>
+              <label class="field span-2">
+                <span>{{ t('Footer line') }}</span>
+                <input v-model="receiptForm.receipt_footer" :placeholder="t('e.g. Thank you for shopping with us')" />
+              </label>
+            </div>
+
+            <div class="sub-label" style="margin-top: 14px">{{ t('Show on the receipt') }}</div>
+            <div class="rc-toggles">
+              <label class="inline-check"><input type="checkbox" v-model="receiptForm.receipt_show_item_code" :true-value="1" :false-value="0" /> {{ t('Item code') }}</label>
+              <label class="inline-check"><input type="checkbox" v-model="receiptForm.receipt_show_barcode" :true-value="1" :false-value="0" /> {{ t('Barcode') }}</label>
+              <label class="inline-check"><input type="checkbox" v-model="receiptForm.receipt_show_serial" :true-value="1" :false-value="0" /> {{ t('Serial numbers') }}</label>
+              <label class="inline-check"><input type="checkbox" v-model="receiptForm.receipt_show_unit_price" :true-value="1" :false-value="0" /> {{ t('Unit price (qty × rate)') }}</label>
+              <label class="inline-check"><input type="checkbox" v-model="receiptForm.receipt_show_payments" :true-value="1" :false-value="0" /> {{ t('Payment methods') }}</label>
+              <label class="inline-check"><input type="checkbox" v-model="receiptForm.receipt_show_note" :true-value="1" :false-value="0" /> {{ t('Sale note') }}</label>
+            </div>
+
+            <div class="rc-textfields">
+              <label class="inline-check"><input type="checkbox" v-model="receiptForm.receipt_show_tax_id" :true-value="1" :false-value="0" /> {{ t('Tax / VAT ID') }}</label>
+              <input v-if="receiptForm.receipt_show_tax_id" v-model="receiptForm.receipt_tax_id" :placeholder="t('e.g. 3001234567')" />
+              <label class="inline-check"><input type="checkbox" v-model="receiptForm.receipt_show_address" :true-value="1" :false-value="0" /> {{ t('Store address') }}</label>
+              <textarea v-if="receiptForm.receipt_show_address" v-model="receiptForm.receipt_address" rows="2" :placeholder="t('Street, city…')"></textarea>
+              <label class="inline-check"><input type="checkbox" v-model="receiptForm.receipt_show_terms" :true-value="1" :false-value="0" /> {{ t('Terms & conditions') }}</label>
+              <textarea v-if="receiptForm.receipt_show_terms" v-model="receiptForm.receipt_terms" rows="2" :placeholder="t('Return within 14 days with the receipt…')"></textarea>
+            </div>
+          </div>
+
+          <div class="rc-preview">
+            <div class="rc-preview-label muted small">{{ t('Live preview') }}</div>
+            <ReceiptView :receipt="previewReceipt" :settings="receiptForm" />
+          </div>
+        </div>
+
+        <!-- Dynamic custom fields, pull any field from the POS Profile or the
+             sale invoice onto the receipt (text or an image such as a ZATCA QR). -->
+        <div class="cf-section">
+          <div class="sub-label">{{ t('Custom fields') }}</div>
+          <p class="muted small" style="margin: 0 0 10px">
+            {{ receiptScope
+              ? t('Extra fields for this outlet, shown in addition to the global custom fields.')
+              : t('Add any field from the POS Profile or the sale invoice, e.g. a ZATCA QR image, a CR number, or a country-specific field. These apply to every outlet, pick an outlet above to add extras just for it.') }}
+          </p>
+          <div v-for="(row, i) in customFields" :key="i" class="cf-row">
+            <select class="cf-in" v-model="row.source" @change="onCfSource(row)">
+              <option value="Sale Invoice">{{ t('Sale invoice') }}</option>
+              <option value="POS Profile">{{ t('POS Profile') }}</option>
+            </select>
+            <select class="cf-in cf-field" v-model="row.fieldname">
+              <option value="">{{ t('Choose a field…') }}</option>
+              <option
+                v-for="o in (fieldOptions[row.source] || [])"
+                :key="o.fieldname"
+                :value="o.fieldname"
+              >{{ o.label }} · {{ o.fieldname }}</option>
+            </select>
+            <input class="cf-in" v-model="row.label" :placeholder="t('Label (optional)')" />
+            <select class="cf-in" v-model="row.render">
+              <option value="Text">{{ t('Text') }}</option>
+              <option value="Image">{{ t('Image / QR') }}</option>
+            </select>
+            <select class="cf-in" v-model="row.position">
+              <option value="Header">{{ t('Header') }}</option>
+              <option value="Footer">{{ t('Footer') }}</option>
+            </select>
+            <button class="btn-ghost" :title="t('Remove')" @click="customFields.splice(i, 1)">
+              <Icon name="close" />
+            </button>
+          </div>
+          <button class="btn btn-outline add-row" @click="addCustomField">
+            <Icon name="plus" /> {{ t('Add a field') }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Company accounts (multi-company) -->
+      <div class="sec-card" v-show="generalSection === 'money'">
+        <div class="sec-title"><Icon name="bank" /> {{ t('Company accounts') }}</div>
+        <p class="sec-note">{{ t('Where each company posts gift cards, the service charge and cashback.') }}</p>
+        <p class="muted hint-row" style="padding: 0 0 10px">
+          {{ t('Each company posts gift cards, the service charge and cashback to its own accounts. Pick a company, then choose its accounts. The lists show only that company\'s chart of accounts. Leave a field empty to use the default account, created automatically.') }}
+        </p>
+        <div class="field-grid">
+          <label class="field">
+            <span>{{ t('Company') }}</span>
+            <select v-model="selectedCompany">
+              <option v-for="c in companies" :key="c" :value="c">{{ c }}</option>
+            </select>
+          </label>
+        </div>
+        <div v-if="selectedCompany" class="field-grid" style="margin-top: 10px">
+          <label class="field">
+            <span>{{ t('Gift card liability account') }}</span>
+            <LinkPicker
+              :key="'gc-' + selectedCompany"
+              doctype="Account"
+              :filters="{ company: selectedCompany }"
+              v-model="companyRow.gift_card_account"
+              :placeholder="t('Auto-create if empty')"
+            />
+          </label>
+          <label class="field">
+            <span>{{ t('Service charge account') }}</span>
+            <LinkPicker
+              :key="'sc-' + selectedCompany"
+              doctype="Account"
+              :filters="{ company: selectedCompany }"
+              v-model="companyRow.service_charge_account"
+              :placeholder="t('Income account…')"
+            />
+          </label>
+          <label class="field">
+            <span>{{ t('Cashback liability account') }}</span>
+            <LinkPicker
+              :key="'cbl-' + selectedCompany"
+              doctype="Account"
+              :filters="{ company: selectedCompany, root_type: 'Liability' }"
+              v-model="companyRow.cashback_liability_account"
+              :placeholder="t('Liability account, created automatically if empty')"
+            />
+            <span class="muted small">{{ t('What the company owes customers in unspent cashback.') }}</span>
+          </label>
+          <label class="field">
+            <span>{{ t('Cashback expense account') }}</span>
+            <LinkPicker
+              :key="'cbe-' + selectedCompany"
+              doctype="Account"
+              :filters="{ company: selectedCompany, root_type: 'Expense' }"
+              v-model="companyRow.cashback_expense_account"
+              :placeholder="t('Expense account, created automatically if empty')"
+            />
+            <span class="muted small">{{ t('The cost of the cashback program.') }}</span>
+          </label>
+          <label class="field">
+            <span>{{ t('Customer deposits account') }}</span>
+            <LinkPicker
+              :key="'dep-' + selectedCompany"
+              doctype="Account"
+              :filters="{ company: selectedCompany, root_type: 'Liability' }"
+              v-model="companyRow.deposit_account"
+              :placeholder="t('Liability account, created automatically if empty')"
+            />
+            <span class="muted small">{{ t('Where money taken on holds waits until the goods are handed over.') }}</span>
+          </label>
+          <label class="field">
+            <span>{{ t('Due from group companies') }}</span>
+            <LinkPicker
+              :key="'gdf-' + selectedCompany"
+              doctype="Account"
+              :filters="{ company: selectedCompany, root_type: 'Asset' }"
+              v-model="companyRow.group_receivable_account"
+              :placeholder="t('Asset account, created automatically if empty')"
+            />
+            <span class="muted small">{{ t('What other companies of the group owe this one for customer balances spent here.') }}</span>
+          </label>
+          <label class="field">
+            <span>{{ t('Due to group companies') }}</span>
+            <LinkPicker
+              :key="'gdt-' + selectedCompany"
+              doctype="Account"
+              :filters="{ company: selectedCompany, root_type: 'Liability' }"
+              v-model="companyRow.group_payable_account"
+              :placeholder="t('Liability account, created automatically if empty')"
+            />
+            <span class="muted small">{{ t('What this company owes others of the group for its customer balances spent there.') }}</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Gift cards mapping -->
+      <div class="sec-card" v-show="generalSection === 'money'">
+        <div class="sec-title"><Icon name="gift" /> {{ t('Gift cards') }}</div>
+        <p class="sec-note">{{ t('Which payment method redeems a gift card, and where its balance sits.') }}</p>
+        <p class="muted hint-row" style="padding: 0">
+          {{ t('The') }} <b>{{ t('mode of payment') }}</b> {{ t('redeems gift cards, the') }} <b>{{ t('liability account') }}</b> {{ t('is set per company above. Leave any field blank to auto-create the default.') }}
+        </p>
+        <div class="field-grid">
+          <label class="field">
+            <span>{{ t('Mode of payment') }}</span>
+            <LinkPicker doctype="Mode of Payment" v-model="generalForm.gift_card_mode_of_payment" :placeholder="t('Default: Gift Card')" />
+          </label>
+          <label class="field">
+            <span>{{ t('Gift card item') }}</span>
+            <LinkPicker doctype="Item" v-model="generalForm.gift_card_item" :placeholder="t('Default: GIFT-CARD')" />
+          </label>
+          <label class="field">
+            <span>{{ t('Expiry (days, 0 = never)') }}</span>
+            <input type="number" min="0" v-model.number="generalForm.gift_card_expiry_days" />
+          </label>
+        </div>
+      </div>
+
+      <!-- Refunds -->
+      <div class="sec-card" v-show="generalSection === 'returns'">
+        <div class="sec-title"><Icon name="exchange" /> {{ t('Refunds') }}</div>
+        <p class="sec-note">{{ t('How the money goes back to the customer.') }}</p>
+        <div class="setting-list">
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.restrict_refund_to_paid_mode" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Restrict refunds to the original payment method') }}</span>
+              <span class="setting-desc">{{ t('A sale can only be refunded to a method the customer actually paid with. Add exceptions below.') }}</span>
+            </span>
+          </label>
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.allow_store_credit_refund" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Allow refunding to Store Credit') }}</span>
+              <span class="setting-desc">{{ t('Off = money back only. Credit the customer actually spent on that sale can always go back to credit.') }}</span>
+            </span>
+          </label>
+        </div>
+        <template v-if="generalForm.restrict_refund_to_paid_mode">
+          <p class="muted hint-row" style="padding: 10px 0 0">
+            {{ t('Exceptions, “if paid with X, also allow refund as Y”. A method can always be refunded to itself, so only add the extras (e.g. paid') }} <b>{{ t('Mada') }}</b> → {{ t('also allow') }} <b>{{ t('Cash') }}</b>).
+          </p>
+          <div v-for="(rule, i) in generalForm.refund_rules" :key="i" class="rule-row">
+            <span class="muted small">{{ t('If paid with') }}</span>
+            <select v-model="rule.paid_mode" class="rule-select">
+              <option value="">{{ t('Choose a method') }}</option>
+              <option v-for="m in payModeOptions" :key="m" :value="m">{{ m }}</option>
+            </select>
+            <span class="muted small">{{ t('also allow refund as') }}</span>
+            <select v-model="rule.refund_mode" class="rule-select">
+              <option value="">{{ t('Choose a method') }}</option>
+              <option v-for="m in payModeOptions" :key="m" :value="m">{{ m }}</option>
+            </select>
+            <button class="btn-ghost" @click="generalForm.refund_rules.splice(i, 1)"><Icon name="close" /></button>
+          </div>
+          <button
+            class="btn btn-outline add-row"
+            @click="generalForm.refund_rules.push({ paid_mode: '', refund_mode: '' })"
+          >
+            {{ t('+ Add refund rule') }}
+          </button>
+        </template>
+      </div>
+
+      <!-- Returns -->
+      <div class="sec-card" v-show="generalSection === 'returns'">
+        <div class="sec-title"><Icon name="refresh" /> {{ t('Returns') }}</div>
+        <p class="sec-note">{{ t('How long a customer has to bring something back, and the reasons the cashier picks from.') }}</p>
+        <div class="setting-list">
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.restrict_returns_to_window" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('Limit regular returns to a time window') }}</span>
+              <span class="setting-desc">{{ t('Block returns after the window below. Past it, the cashier sends a return-approval request (approved by the Approver Role set under Discount approval).') }}</span>
+            </span>
+          </label>
+        </div>
+        <label v-if="generalForm.restrict_returns_to_window" class="field" style="max-width: 220px; margin-top: 10px">
+          <span>{{ t('Return window (days, 0 = no limit)') }}</span>
+          <input type="number" min="0" v-model.number="generalForm.return_window_days" />
+        </label>
+        <div class="sub-label" style="margin-top: 14px">{{ t('Return reasons') }}</div>
+        <p class="muted hint-row" style="padding: 0 0 10px">
+          {{ t('Shown at the till when a cashier refunds an item. The till always also offers') }}
+          <b>{{ t('Other') }}</b> {{ t('for a free-text reason.') }}
+        </p>
+        <div v-for="(r, i) in generalForm.return_reasons" :key="i" class="item-row">
+          <input
+            :value="shownReason(generalForm.return_reasons[i])"
+            :placeholder="t('Reason (for example Damaged product)')"
+            @input="generalForm.return_reasons[i] = keptReason($event.target.value)"
+          />
+          <button class="btn-ghost" @click="generalForm.return_reasons.splice(i, 1)"><Icon name="close" /></button>
+        </div>
+        <button
+          class="btn btn-outline add-row"
+          @click="generalForm.return_reasons.push('')"
+        >
+          {{ t('+ Add reason') }}
+        </button>
+      </div>
+
+      <!-- What cannot be returned -->
+      <div class="sec-card" v-show="generalSection === 'returns'">
+        <div class="sec-title"><Icon name="shield" /> {{ t('What cannot be returned') }}</div>
+        <p class="sec-note">
+          {{ t('Refuse a return by item, item group (and everything under it), brand or tag. Either the item never comes back, or it comes back only when an approver allows it. Saved on its own, not with the button below.') }}
+        </p>
+        <div v-if="!returnRestrictions.length" class="muted small" style="padding-bottom: 8px">
+          {{ t('Nothing is restricted. Every product can be returned.') }}
+        </div>
+        <div v-for="rule in returnRestrictions" :key="rule.name" class="restriction-row">
+          <div class="restriction-main">
+            <div class="restriction-title">
+              {{ rule.title }}
+              <span class="restriction-badge" :class="{ hard: !rule.allow_with_approval }">
+                {{ rule.allow_with_approval ? t('Needs approval') : t('Never returnable') }}
+              </span>
+              <span v-if="!rule.enabled" class="restriction-badge off">{{ t('Off') }}</span>
+            </div>
+            <div class="muted small">{{ restrictionSummary(rule) }}</div>
+          </div>
+          <button class="btn-ghost" @click="editReturnRestriction(rule)">{{ t('Edit') }}</button>
+          <button class="btn-ghost danger" :title="t('Delete')" @click="deleteReturnRestriction(rule)"><Icon name="close" /></button>
+        </div>
+        <button v-if="!restrictionForm" class="btn btn-outline add-row" @click="newReturnRestriction">
+          {{ t('+ Add return restriction') }}
+        </button>
+
+        <div v-if="restrictionForm" class="restriction-editor">
+          <label class="field" style="max-width: 320px">
+            <span>{{ t('Name this rule') }}</span>
+            <input v-model="restrictionForm.title" :placeholder="t('For example: no returns on underwear')" />
+          </label>
+          <div class="item-row">
+            <select v-model="restrictionForm.applies_to" style="width: 130px" @change="restrictionForm.value = ''; restrictionForm.label = ''">
+              <option value="Item">{{ t('Item') }}</option>
+              <option value="Item Group">{{ t('Item Group') }}</option>
+              <option value="Brand">{{ t('Brand') }}</option>
+              <option value="Tag">{{ t('Tag') }}</option>
+            </select>
+            <LinkPicker
+              :doctype="restrictionForm.applies_to"
+              v-model="restrictionForm.value"
+              :label="restrictionForm.label"
+              :placeholder="restrictionForm.applies_to === 'Item' ? t('Search by name, code or barcode…') : t('Search and pick from the list…')"
+              @picked="(option) => (restrictionForm.label = option?.item_name || option?.name || '')"
+            />
+          </div>
+          <div class="setting-list">
+            <label class="setting-row">
+              <input type="checkbox" class="setting-toggle" v-model="restrictionForm.allow_with_approval" :true-value="1" :false-value="0" />
+              <span class="setting-text">
+                <span class="setting-title">{{ t('An approved request can still return it') }}</span>
+                <span class="setting-desc">{{ t('On: the cashier sends a return approval request and the approver decides. Off: nobody can return it.') }}</span>
+              </span>
+            </label>
+            <label class="setting-row">
+              <input type="checkbox" class="setting-toggle" v-model="restrictionForm.enabled" :true-value="1" :false-value="0" />
+              <span class="setting-text">
+                <span class="setting-title">{{ t('Rule is on') }}</span>
+              </span>
+            </label>
+          </div>
+          <label class="field" style="max-width: 460px">
+            <span>{{ t('Reason shown at the till (optional)') }}</span>
+            <input v-model="restrictionForm.note" :placeholder="t('For example: hygiene items cannot be returned once opened')" />
+          </label>
+          <div class="sub-label">{{ t('Outlets') }}</div>
+          <div class="outlet-row">
+            <label v-for="profile in session.availableProfiles" :key="profile" class="inline-check">
+              <input type="checkbox" :value="profile" v-model="restrictionForm.pos_profiles" />
+              {{ profile }}
+            </label>
+            <span class="muted small">{{ t('(none ticked = all outlets)') }}</span>
+          </div>
+          <div class="item-row" style="margin-top: 12px">
+            <button class="btn btn-primary" :disabled="restrictionBusy" @click="saveReturnRestriction">
+              {{ restrictionBusy ? t('Saving…') : t('Save restriction') }}
+            </button>
+            <button class="btn btn-outline" @click="restrictionForm = null">{{ t('Cancel') }}</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Discount approval -->
+      <div class="sec-card" v-show="generalSection === 'approvals'">
+        <div class="sec-title"><Icon name="shield" /> {{ t('Discount approval') }}</div>
+        <p class="sec-note">{{ t('What a cashier may discount alone, and who clears the rest.') }}</p>
+        <div class="field-grid">
+          <label class="field">
+            <span>{{ t('Discount limit % (0 = no limit)') }}</span>
+            <input type="number" min="0" max="100" v-model.number="generalForm.discount_limit_percent" />
+          </label>
+          <label class="field">
+            <span>{{ t('Over-limit approval method') }}</span>
+            <select v-model="generalForm.discount_approval_mode">
+              <option value="Passcode only">{{ t('Passcode only') }}</option>
+              <option value="Request only">{{ t('Request only') }}</option>
+              <option value="Passcode or request">{{ t('Passcode or request') }}</option>
+            </select>
+          </label>
+        </div>
+        <p class="muted hint-row">{{ modeHint }}</p>
+
+        <!-- Passcode-based approval (a manager is at the till). The same PINs
+             approve a cash out (0.61.0) whatever the discount method. -->
+        <template v-if="generalForm.discount_approval_mode !== 'Request only' || generalForm.cash_out_approval !== 'Off'">
+          <div class="field-grid">
+            <label class="field">
+              <span>{{ t('Master passcode') }} {{ settingsInfo.has_passcode ? t('(set. Leave blank to keep)') : t('(optional)') }}</span>
+              <input type="password" v-model="generalForm.discount_passcode" placeholder="••••" />
+            </label>
+          </div>
+          <div class="sub-label">
+            {{ t('Approvers, each manager has their own PIN, the name is recorded on the invoice') }}
+          </div>
+          <div v-for="(approver, i) in generalForm.approvers" :key="i" class="item-row">
+            <input v-model="approver.approver_name" :placeholder="t('Approver name (e.g. Manager Khobar)')" />
+            <input
+              type="password"
+              v-model="approver.passcode"
+              :placeholder="approver.has_passcode ? t('PIN set, blank keeps it') : t('PIN')"
+              style="max-width: 180px"
+            />
+            <button class="btn-ghost" @click="generalForm.approvers.splice(i, 1)"><Icon name="close" /></button>
+          </div>
+          <button
+            class="btn btn-outline add-row"
+            @click="generalForm.approvers.push({ approver_name: '', passcode: '' })"
+          >
+            {{ t('+ Add approver') }}
+          </button>
+        </template>
+
+        <!-- Request-based approval (a role-holder approves remotely). The same
+             role approves discount, return and cash out requests. -->
+        <template v-if="generalForm.discount_approval_mode !== 'Passcode only' || generalForm.restrict_returns_to_window || generalForm.cash_out_approval !== 'Off'">
+          <div class="sub-label">{{ t('Approver role for requests') }}</div>
+          <div class="field-grid">
+            <label class="field">
+              <span>{{ t('Role that can approve requests (discount, return and cash out)') }}</span>
+              <LinkPicker doctype="Role" v-model="generalForm.approver_role" :placeholder="t('e.g. LumenPOS Manager')" />
+            </label>
+          </div>
+          <p class="muted hint-row">
+            {{ t('Holders of this role (plus LumenPOS / System Managers) get an Approvals tray in the POS and can approve requests while the cashier\'s register is still open.') }}
+          </p>
+        </template>
+      </div>
+
+      <!-- Cash out (lumen_restaurants.cash_out, 0.61.0) -->
+      <div class="sec-card" v-show="generalSection === 'approvals'" data-tour="settings-cash-out">
+        <div class="sec-title"><Icon name="cash" /> {{ t('Cash out') }}</div>
+        <p class="sec-note">{{ t('Money taken out of the drawer during a shift.') }}</p>
+        <div class="setting-list">
+          <label class="setting-row">
+            <input type="checkbox" class="setting-toggle" v-model="generalForm.cash_out_reason_required" :true-value="1" :false-value="0" />
+            <span class="setting-text">
+              <span class="setting-title">{{ t('A reason for every cash out') }}</span>
+              <span class="setting-desc">{{ t('On (the default): the cashier writes why the money is taken out. It is kept with the shift and in the audit log.') }}</span>
+            </span>
+          </label>
+        </div>
+        <div class="field-grid" style="margin-top: 16px">
+          <label class="field">
+            <span>{{ t('Manager approval for cash out') }}</span>
+            <select v-model="generalForm.cash_out_approval">
+              <option value="Off">{{ t('Off') }}</option>
+              <option value="Above an amount">{{ t('Above an amount') }}</option>
+              <option value="Always">{{ t('Always') }}</option>
+            </select>
+            <span class="setting-desc">{{ t("A manager approves with their passcode at the till (the approvers above) or a request from the Approvals tray. Managers need nobody's approval.") }}</span>
+          </label>
+          <label v-if="generalForm.cash_out_approval === 'Above an amount'" class="field">
+            <span>{{ t('Approval above') }}</span>
+            <input type="number" min="0" step="0.01" v-model.number="generalForm.cash_out_approval_amount" />
+            <span class="setting-desc">{{ t("In the company's currency. A drawer in another currency is valued at the shift's rate.") }}</span>
+          </label>
+        </div>
+        <p class="muted hint-row">{{ t('Who may put money in and who may take it out are two permissions, below.') }}</p>
+      </div>
+
+      <!-- Permissions -->
+      <div class="sec-card" v-show="generalSection === 'approvals'">
+        <div class="sec-title"><Icon name="shield" /> {{ t('Permissions') }}</div>
+        <p class="sec-note">{{ t('Which roles may change a price, take a return, and approve one.') }}</p>
+        <p class="muted hint-row" style="padding: 0 0 6px">
+          {{ t('Say who may do each action at the till. A rule names a role or one person, and any matching rule lets them through. System / LumenPOS Managers always pass.') }}
+        </p>
+        <!-- One row per rule: a role, or a single person by name. Several rows
+             for the same action mean any of them passes. -->
+        <div class="cap-rules">
+          <div v-for="(row, i) in generalForm.capability_rules" :key="'cap' + i" class="cap-row">
+            <select v-model="row.capability" class="cap-what">
+              <option v-for="c in capabilityOptions" :key="c" :value="c">{{ t(c) }}</option>
+            </select>
+            <LinkPicker doctype="Role" v-model="row.role" :placeholder="t('Any role')" />
+            <LinkPicker doctype="User" v-model="row.user" :placeholder="t('or one person')" />
+            <button class="btn-ghost" @click="generalForm.capability_rules.splice(i, 1)">
+              <Icon name="close" />
+            </button>
+          </div>
+          <button class="btn btn-outline btn-sm" @click="addCapabilityRule">
+            <Icon name="plus" /> {{ t('Add a rule') }}
+          </button>
+        </div>
+        <p class="muted hint-row">
+          {{ t('An action with no rule is open to everyone. Returning past the window is the exception: nobody does it directly until you name someone, everyone else sends an approval request.') }}
+        </p>
+        <p class="muted hint-row">
+          {{ t('Edit price / discount also covers typing a new price on a sale line, at an outlet whose POS Profile has Allow User to Edit Rate ticked.') }}
+        </p>
+      </div>
+
+      <!-- Sticky footer -->
+      <div class="editor-footer">
+        <span style="flex: 1" />
+        <button class="btn btn-primary" :disabled="saving || !canManage" @click="saveGeneral">
+          {{ saving ? t('Saving…') : t('Save Settings') }}
+        </button>
+      </div>
+      <p v-if="!canManage" class="muted hint-row">{{ t('You need write access to LumenPOS Settings to change these. Ask an administrator to grant the LumenPOS Manager role.') }}</p>
+    </section>
+
+    <!-- ============ AUDIT LOG ============ -->
+    <section v-if="activeTab === 'Audit Log'" class="tab-body">
+      <div class="sec-card">
+        <div class="sec-title"><Icon name="shield" /> {{ t('Audit log') }}</div>
+        <p class="muted hint-row" style="padding: 0 0 10px">
+          {{ t('Sensitive till actions, over-limit discounts, returns, register open/close, emailed receipts and settings changes. Turn it on/off in') }}
+          <b>{{ t('General → Features') }}</b>.
+        </p>
+        <div class="audit-filters">
+          <select v-model="auditFilter.action" @change="reloadAudit">
+            <option value="">{{ t('All actions') }}</option>
+            <option v-for="a in AUDIT_ACTIONS" :key="a" :value="a">{{ t(a) }}</option>
+          </select>
+          <input type="date" v-model="auditFilter.from_date" @change="reloadAudit" :title="t('From')" />
+          <input type="date" v-model="auditFilter.to_date" @change="reloadAudit" :title="t('To')" />
+          <button class="btn btn-outline" @click="reloadAudit"><Icon name="refresh" /> {{ t('Refresh') }}</button>
+        </div>
+        <div v-if="!auditLogs.length" class="muted empty">
+          {{ auditLoading ? t('Loading…') : t('No audit entries for this filter.') }}
+        </div>
+        <table v-else class="audit-table">
+          <thead>
+            <tr>
+              <th>{{ t('When') }}</th><th>{{ t('Action') }}</th><th>{{ t('User') }}</th>
+              <th class="right">{{ t('Amount') }}</th><th>{{ t('Detail') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in auditLogs" :key="row.name">
+              <td class="muted small">{{ shortTime(row.creation) }}</td>
+              <td><span class="audit-tag">{{ t(row.action) }}</span></td>
+              <td class="small">{{ row.user }}</td>
+              <td class="right">{{ row.amount ? money(row.amount) : '-' }}</td>
+              <td class="small">
+                {{ row.detail }}
+                <span v-if="row.reference_name" class="muted">· {{ row.reference_name }}</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-if="auditLogs.length && auditMore" class="editor-actions" style="margin-top: 12px">
+          <button class="btn btn-outline" :disabled="auditLoading" @click="loadMoreAudit">
+            {{ auditLoading ? t('Loading…') : t('Load more') }}
+          </button>
+          <span style="flex: 1" />
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ STATUS ============ -->
+    <section v-if="activeTab === 'System check'" class="tab-body">
+      <div class="sec-card">
+        <div class="sec-title"><Icon name="shield" /> {{ t('System check') }}</div>
+        <p class="sec-note">{{ named(t('What may stop LumenPOS working on this site, and what to do about it. Send a screenshot of this page, or Copy for support, with any problem you report.')) }}</p>
+        <div class="sc-bar">
+          <span v-if="check" class="sc-versions">
+            <bdi>Lumen Restaurants {{ check.versions.lumenpos }}</bdi> · <bdi>ERPNext {{ check.versions.erpnext }}</bdi> · <bdi>Frappe {{ check.versions.frappe }}</bdi>
+          </span>
+          <span style="flex: 1" />
+          <button class="btn btn-outline" :disabled="checking || session.offline" @click="runCheck">
+            <Icon name="refresh" /> {{ checking ? t('Checking…') : t('Check again') }}
+          </button>
+          <button class="btn btn-outline" :disabled="!check" @click="copyCheck"><Icon name="report" /> {{ t('Copy for support') }}</button>
+        </div>
+        <div v-if="session.offline" class="muted small">{{ t('The system check needs a connection.') }}</div>
+        <div v-else-if="checkError" class="neg small">{{ checkError }}</div>
+        <div v-else-if="!check" class="muted small">{{ t('Loading…') }}</div>
+        <template v-else>
+          <div class="sc-chips">
+            <span class="sc-chip problem">{{ t('Problems: {n}', { n: check.counts.problem }) }}</span>
+            <span class="sc-chip warn">{{ t('Attention: {n}', { n: check.counts.warn }) }}</span>
+            <span class="sc-chip info">{{ t('Notes: {n}', { n: check.counts.info }) }}</span>
+            <span class="sc-chip ok">{{ t('OK: {n}', { n: check.counts.ok }) }}</span>
+            <span class="muted small">{{ t('Checked at {time}', { time: check.checked_at }) }}</span>
+          </div>
+          <template v-for="area in CHECK_AREAS" :key="area.key">
+            <div v-if="checkRows(area.key).length" class="sc-area">
+              <div class="sc-area-title">{{ t(area.label) }}</div>
+              <div v-for="(row, i) in checkRows(area.key)" :key="area.key + i" class="sc-row" :class="row.level">
+                <span class="sc-mark" :class="row.level">
+                  <Icon :name="row.level === 'ok' ? 'check' : row.level === 'info' ? 'bulb' : 'warning'" />
+                </span>
+                <div class="sc-text">
+                  <div class="sc-title"><bdi>{{ row.title }}</bdi> <span class="sc-level" :class="row.level">{{ t(LEVEL_LABEL[row.level]) }}</span></div>
+                  <div v-if="row.detail" class="sc-detail"><bdi>{{ row.detail }}</bdi></div>
+                  <ul v-if="row.items.length" class="sc-items">
+                    <li v-for="(item, j) in row.items" :key="j"><bdi>{{ item }}</bdi></li>
+                  </ul>
+                  <div v-if="row.fix" class="sc-fix"><b>{{ t('What to do:') }}</b>&nbsp;<bdi>{{ row.fix }}</bdi></div>
+                </div>
+              </div>
+            </div>
+          </template>
+        </template>
+      </div>
+    </section>
+
+    <section v-if="activeTab === 'Status'" class="tab-body">
+      <div class="status-grid">
+        <div class="stat sec-card"><div class="stat-label">{{ t('Lumen Restaurants version') }}</div><div class="stat-value">{{ settingsInfo.version || '-' }}</div></div>
+        <div class="stat sec-card"><div class="stat-label">{{ t('Outlet (POS Profile)') }}</div><div class="stat-value">{{ session.posProfile }}</div></div>
+        <div class="stat sec-card"><div class="stat-label">{{ t('Default price list') }}</div><div class="stat-value">{{ session.priceList }}</div></div>
+        <div class="stat sec-card"><div class="stat-label">{{ t('Connection') }}</div><div class="stat-value">{{ session.offline ? t('⚠ Offline') : t('✓ Online') }}</div></div>
+        <div class="stat sec-card"><div class="stat-label">{{ t('Offline catalog cache') }}</div><div class="stat-value">{{ t('{n} items', { n: cachedItems }) }}</div></div>
+        <div class="stat sec-card"><div class="stat-label">{{ t('Offline customers cache') }}</div><div class="stat-value">{{ cachedCustomers }}</div></div>
+        <div class="stat sec-card"><div class="stat-label">{{ t('Queued offline sales') }}</div><div class="stat-value">{{ session.queuedCount }}</div></div>
+        <div class="stat sec-card"><div class="stat-label">{{ t('Offline storage') }}</div><div class="stat-value">{{ persisted ? t('✓ Persistent') : t('⚠ Best-effort') }}</div></div>
+        <div class="stat sec-card"><div class="stat-label">{{ t('Opens without a connection') }}</div><div class="stat-value">{{ shellReady ? t('✓ Ready') : t('⚠ Not yet, open the till once while online') }}</div></div>
+        <div class="stat sec-card"><div class="stat-label">{{ t('Receipt printer') }}</div><div class="stat-value">{{ session.printerConfigured ? t('✓ ESC/POS') : t('Browser print') }}</div></div>
+        <div class="stat sec-card"><div class="stat-label">{{ t('Print format (POS Profile)') }}</div><div class="stat-value">{{ session.printFormat || t('Built-in receipt') }}</div></div>
+        <div class="stat sec-card"><div class="stat-label">{{ t('VAT / taxes') }}</div><div class="stat-value">{{ taxSummary }}</div></div>
+        <div class="stat sec-card"><div class="stat-label">{{ t('Register') }}</div><div class="stat-value">{{ session.registerOpen ? t('Open') : t('Closed') }}</div></div>
+      </div>
+      <div class="editor-actions">
+        <button class="btn btn-outline" @click="refreshCache"><Icon name="refresh" /> {{ t('Refresh offline catalog now') }}</button>
+        <button class="btn btn-outline" @click="offlineLogOpen = true"><Icon name="report" /> {{ t('View offline sales log') }}</button>
+        <span style="flex: 1" />
+      </div>
+
+      <!-- Performance indexes: builds fail silently into the Error Log on a big
+           site (a busy table can refuse the lock), so show them and offer a
+           rebuild that needs no deploy. -->
+      <div class="sec-card" style="margin-top: 16px">
+        <div class="sec-title"><Icon name="bulb" /> {{ t('Performance indexes') }}</div>
+        <p class="muted hint-row" style="padding: 0 0 10px">
+          {{ t('These keep sales, search and shift reports fast on a large site. A build can fail quietly if the table is busy, rebuild it here, no deploy needed.') }}
+        </p>
+        <div v-if="!indexHealth.length" class="muted small">{{ t('Loading…') }}</div>
+        <table v-else class="idx-table">
+          <tbody>
+            <tr v-for="(ix, i) in indexHealth" :key="i">
+              <td class="idx-doctype">{{ ix.doctype }}</td>
+              <td class="muted small idx-cols">{{ ix.columns }}</td>
+              <td>
+                <span class="idx-badge" :class="ix.state">
+                  {{ ix.state === 'built' ? t('Built') : ix.state === 'missing' ? t('Missing') : ix.state === 'n-a' ? t('Not on this site') : t('Unknown') }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="editor-actions" style="margin-top: 10px">
+          <button class="btn btn-outline" :disabled="rebuilding" @click="rebuildIndexes">
+            <Icon name="refresh" /> {{ rebuilding ? t('Rebuilding…') : t('Rebuild missing indexes') }}
+          </button>
+          <span v-if="missingIndexes" class="muted small">{{ t('{n} missing', { n: missingIndexes }) }}</span>
+        </div>
+      </div>
+      <p class="muted hint-row">
+        {{ t('Store-level settings (price list, warehouse, payment methods, taxes, printer) live on the') }} <b>{{ t('POS Profile') }}</b> {{ t('in ERPNext, that stays the single source of truth. This page covers what Vend kept in Setup: promotions, price books, channels and discount approval.') }}
+      </p>
+    </section>
+
+    <OfflineLogModal v-if="offlineLogOpen" @close="offlineLogOpen = false" />
+  </div>
+</template>
+
+<script setup>
+import Icon from '../components/Icon.vue'
+import AddonSettings from '../components/AddonSettings.vue'
+import FloorSettings from '../components/FloorSettings.vue'
+import OfflineLogModal from '../components/OfflineLogModal.vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { call } from '../api'
+import { money, shortTime, parseMoney, isolate, rateText } from '../format'
+import { useSessionStore } from '../stores/session'
+import { useCatalogStore } from '../stores/catalog'
+import { useHelpStore } from '../stores/help'
+import { catalogCount, storagePersisted, customerCount } from '../offline'
+import LinkPicker from '../components/LinkPicker.vue'
+import ScopePicker from '../components/ScopePicker.vue'
+import PriceListEditor from '../components/PriceListEditor.vue'
+import ReceiptView from '../components/ReceiptView.vue'
+import { t, LANGUAGES } from '../i18n'
+
+const session = useSessionStore()
+const help = useHelpStore()
+const catalog = useCatalogStore()
+
+const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+const ALL_TABS = ['Promotions', 'Cashback', 'Bundles', 'Price Books', 'Loyalty & Gift Cards', 'General', 'Audit Log', 'System check', 'Status']
+const perms = computed(() => session.permissions || {})
+
+function tabAllowed(tab) {
+  const p = perms.value
+  if (tab === 'Promotions') return p.promotions?.read
+  if (tab === 'Cashback') return p.cashback?.read
+  if (tab === 'Bundles') return p.bundles?.read
+  if (tab === 'Price Books') return p.price_books?.read
+  if (tab === 'Loyalty & Gift Cards') return p.loyalty || p.gift_cards
+  if (tab === 'General') return p.settings
+  if (tab === 'Audit Log') return Boolean(p.is_manager)
+  if (tab === 'System check') return Boolean(p.system_check)
+  return true // Status is read-only info
+}
+const tabs = computed(() => ALL_TABS.filter(tabAllowed))
+const activeTab = ref('Status')
+// Settings-area manager (the General tab). Section-specific powers use perms.*
+const canManage = computed(() => Boolean(perms.value.settings))
+const saving = ref(false)
+const settingsInfo = ref({})
+const cachedItems = ref(0)
+const cachedCustomers = ref(0)
+const offlineLogOpen = ref(false)
+
+// ---- performance indexes (Status tab) ----
+const indexHealth = ref([])
+const rebuilding = ref(false)
+const missingIndexes = computed(
+  () => indexHealth.value.filter((i) => i.state === 'missing').length
+)
+async function loadIndexHealth() {
+  indexHealth.value = await call('lumen_restaurants.api.settings.get_index_health').catch(() => [])
+}
+async function rebuildIndexes() {
+  rebuilding.value = true
+  try {
+    await call('lumen_restaurants.api.settings.rebuild_indexes')
+    session.notify(t('Rebuilding indexes in the background. Check back shortly.'))
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    rebuilding.value = false
+  }
+}
+const persisted = ref(false)
+// Is the app shell on this device (service worker in control)? That is what
+// decides whether the till can be RELOADED during an outage.
+const shellReady = ref(false)
+const groupPick = ref('')
+
+const promotions = ref([])
+const editingPromo = ref(false)
+const promoForm = ref({})
+const testBasket = ref([{ item_code: '', label: '', qty: 1 }])
+const testResult = ref(null)
+const testing = ref(false)
+
+const cashbackRules = ref([])
+const editingCashback = ref(false)
+const cashbackForm = ref({})
+const cashbackSearch = ref('')
+const cashbackAccounting = ref([])
+const cashbackBooking = ref(false)
+const cashbackBookMsg = ref('')
+const cashbackBookFailed = ref(false)
+
+const priceBooks = ref([])
+const editingBook = ref(false)
+const bookForm = ref({})
+const expandedAppIdx = ref(-1)
+
+const bundles = ref([])
+const editingBundle = ref(false)
+const bundleForm = ref({})
+
+const loyaltyPrograms = ref([])
+const creatingLoyalty = ref(false)
+const loyaltyForm = ref({ name: '', spend_per_point: 10, point_value: 0.1, expiry_days: 365, expense_account: '', company: session.company || '' })
+const giftCardList = ref([])
+const giftCardSearch = ref('')
+let cardTimer = null
+
+// The actions a shop can restrict. The value IS the stored label, so a rule
+// keeps meaning what it says even if the till is translated.
+const capabilityOptions = [
+  'Edit price / discount',
+  'Make returns',
+  'Return past the window',
+  'Exchange goods',
+  'Cash in',
+  'Cash out',
+  'Reprint a receipt',
+  'Open the register',
+  'Close the register',
+  'Hold goods for a customer',
+  'See sales by salesperson',
+  'See the system check',
+  'Sell on account',
+  'Take customer payments',
+  "Set a customer's credit",
+  // Lumen Restaurants: the restaurant's own actions.
+  'Open a table order',
+  'Move or merge tables',
+  'Cancel a table order',
+  'Edit the menu',
+  'Edit the floor plan',
+]
+
+function addCapabilityRule() {
+  generalForm.value.capability_rules.push({ capability: 'Make returns', role: '', user: '' })
+}
+const generalForm = ref({
+  till_languages: [],
+  delivery_apps: [],
+  payment_method_rules: [],
+  discount_limit_percent: 0,
+  discount_passcode: '',
+  discount_approval_mode: 'Passcode only',
+  approver_role: '',
+  cash_out_reason_required: 1,
+  cash_out_approval: 'Off',
+  cash_out_approval_amount: 0,
+  price_edit_role: '',
+  return_role: '',
+  return_exceed_role: '',
+  exchange_role: '',
+  enable_layaway: 0,
+  enable_multi_currency: 0,
+  auto_rates_enabled: 0,
+  sale_currencies: [],
+  customer_form_fields: [],
+  balances_across_companies: 'Shared by the group',
+  layaway_reserve_stock: 1,
+  deposit_with_tax: 0,
+  layaway_days: 30,
+  layaway_min_percent: 0,
+  capability_rules: [],
+  restrict_returns_to_window: 0,
+  return_window_days: 14,
+  offline_stock_only: 0,
+  offline_returns: 1,
+  background_upload: 1,
+  warn_unprotected_storage: 1,
+  help_in_till: 1,
+  help_offer_tour: 1,
+  help_whats_new: 1,
+  shift_scope: 'Per cashier',
+  one_shift_per_user: 0,
+  carry_shift_past_midnight: 1,
+  warn_locked_periods: 1,
+  variance_reason_mode: 'Optional',
+  variance_reason_threshold: 0,
+  variance_reasons: [],
+  credit_sales_enabled: 0,
+  credit_customers: 'Customers allowed on their card',
+  credit_default_limit: 0,
+  variance_alert_enabled: 0,
+  variance_alert_threshold: 0,
+  variance_alert_role: '',
+  overdue_alert_enabled: 0,
+  overdue_alert_role: '',
+  overdue_alert_hours: 14,
+  overdue_grace_minutes: 60,
+  show_out_of_stock: 0,
+  serial_scan_only: 0,
+  enable_order_discount: 1,
+  enable_service_charge: 0,
+  service_charge_percent: 0,
+  service_charge_account: '',
+  enable_price_checker: 1,
+  salesperson_mode: 'Optional',
+  enable_insights: 1,
+  enable_cashback: 1,
+  enable_xreport: 1,
+  enable_audit_log: 1,
+  enable_email_receipt: 0,
+  enable_customer_display: 0,
+  enable_till_lock: 0,
+  auto_lock_minutes: 0,
+  enable_quick_keys: 0,
+  quick_keys: [],
+  receipt_template: 'Standard',
+  receipt_logo: '',
+  receipt_header: '',
+  receipt_footer: '',
+  receipt_show_item_code: 0,
+  receipt_show_barcode: 0,
+  receipt_show_serial: 1,
+  receipt_show_unit_price: 1,
+  receipt_show_payments: 1,
+  receipt_show_note: 1,
+  receipt_show_tax_id: 0,
+  receipt_tax_id: '',
+  receipt_show_address: 0,
+  receipt_address: '',
+  receipt_show_terms: 0,
+  receipt_terms: '',
+  receipt_custom_fields: [],
+  company_settings: [],
+  gift_card_expiry_days: 0,
+  gift_card_mode_of_payment: '',
+  gift_card_account: '',
+  gift_card_item: '',
+  restrict_refund_to_paid_mode: 1,
+  allow_store_credit_refund: 1,
+  refund_rules: [],
+  return_reasons: [],
+  approvers: [],
+})
+const logoError = ref(false)
+
+// ---- restaurant tables ----
+const tables = ref([])
+const savingTables = ref(false)
+
+async function loadTables() {
+  if (!session.posProfile) return
+  try {
+    tables.value = await call('lumen_restaurants.api.restaurant.list_tables', {
+      pos_profile: session.posProfile,
+    })
+  } catch {
+    tables.value = [] // the doctype is not there yet on a site pulled without a migrate
+  }
+}
+
+function addTable() {
+  tables.value.push({ name: null, table_no: '', area: '', seats: 4, disabled: 0 })
+}
+
+async function removeTable(i) {
+  const row = tables.value[i]
+  if (!row.name) {
+    tables.value.splice(i, 1)
+    return
+  }
+  if (!confirm(t('Remove this table?'))) return
+  try {
+    await call('lumen_restaurants.api.restaurant.delete_table', { name: row.name })
+    tables.value.splice(i, 1)
+  } catch (e) {
+    session.notify(e.message, true)
+  }
+}
+
+async function saveTables() {
+  savingTables.value = true
+  try {
+    for (const row of tables.value) {
+      if (!String(row.table_no || '').trim()) continue
+      await call('lumen_restaurants.api.restaurant.save_table', {
+        pos_profile: session.posProfile,
+        name: row.name || null,
+        table_no: row.table_no,
+        area: row.area || null,
+        seats: row.seats || 0,
+        disabled: row.disabled ? 1 : 0,
+      })
+    }
+    await loadTables()
+    session.notify(t('Tables saved'))
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    savingTables.value = false
+  }
+}
+// Return reasons and reasons for a short or over are kept in English and every
+// till shows them in its own language, so this screen shows them translated too.
+// A reason left as it was is saved back as its English text, so it stays
+// translated everywhere; a reason the manager rewrites is kept as written.
+// Lumen Restaurants: a text that names LumenPOS as the product, shown with our
+// name. LumenPOS's words stay the translation keys, so every language still
+// translates (as system_check._named does on the server).
+const named = (text) => String(text).split('LumenPOS').join('Lumen Restaurants')
+const reasonKeys = ref([])
+const reasonByShown = computed(() => {
+  const map = new Map()
+  for (const key of reasonKeys.value) {
+    const shown = t(key)
+    if (shown !== key && !map.has(shown)) map.set(shown, key)
+  }
+  return map
+})
+const shownReason = (value) => (value ? t(value) : '')
+const keptReason = (value) => reasonByShown.value.get(value) || value
+
+// ---- General is split into groups, like the tabs on the left ----
+const generalSections = [
+  { key: 'features', label: 'Features', icon: 'bulb' },
+  { key: 'register', label: 'Register and shifts', icon: 'store' },
+  { key: 'payments', label: 'Payments and delivery', icon: 'card' },
+  { key: 'currencies', label: 'Other currencies', icon: 'cash' },
+  { key: 'customers', label: 'Customers', icon: 'person' },
+  { key: 'companies', label: 'Companies', icon: 'company' },
+  { key: 'returns', label: 'Returns and refunds', icon: 'refresh' },
+  { key: 'holds', label: 'Holds and deposits', icon: 'bookmark' },
+  { key: 'restaurant', label: 'Restaurant', icon: 'table' },
+  { key: 'credit', label: 'Sales on account', icon: 'clock' },
+  { key: 'receipt', label: 'Receipt', icon: 'image' },
+  { key: 'languages', label: 'Languages', icon: 'globe' },
+  { key: 'help', label: 'Help for staff', icon: 'help' },
+  { key: 'money', label: 'Accounts and gift cards', icon: 'bank' },
+  { key: 'approvals', label: 'Approvals and access', icon: 'shield' },
+]
+const generalSection = ref('features')
+
+// ---- languages at the till (lumen_restaurants.languages) ----
+// till_languages [] means every language, so one a later update adds shows up
+// by itself; ticking everything goes back to [].
+const languageOn = (code) =>
+  code === 'en' ||
+  !generalForm.value.till_languages?.length ||
+  generalForm.value.till_languages.includes(code)
+function toggleLanguage(code, on) {
+  if (code === 'en') return
+  let list = generalForm.value.till_languages?.length
+    ? [...generalForm.value.till_languages]
+    : LANGUAGES.map((l) => l.code)
+  list = on ? [...new Set([...list, code])] : list.filter((c) => c !== code)
+  if (!list.includes('en')) list.unshift('en')
+  generalForm.value.till_languages = LANGUAGES.every((l) => list.includes(l.code)) ? [] : list
+}
+
+// ---- customer balances across companies (lumen_restaurants.inter_company) ----
+const BALANCE_MODES = ['Shared by the group', 'Separate per company']
+const icStatus = ref(null)
+const icBusy = ref(false)
+async function loadInterCompany() {
+  try {
+    icStatus.value = await call('lumen_restaurants.inter_company.status')
+  } catch {
+    icStatus.value = { pending: [], recent: [], companies: {} }
+  }
+}
+async function bookInterCompany() {
+  icBusy.value = true
+  try {
+    const res = await call('lumen_restaurants.inter_company.post_now')
+    icStatus.value = res
+    session.notify(t('{n} lines booked', { n: res.booked }))
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    icBusy.value = false
+  }
+}
+
+// ---- the new-customer form: Customer fields a shop can add ----
+const FORM_STATES = ['Hidden', 'Optional', 'Required']
+const customerFieldChoices = ref([])
+const customerFieldToAdd = ref('')
+const customerFieldChoicesLeft = computed(() => {
+  const taken = new Set((generalForm.value.customer_form_fields || []).map((r) => r.fieldname))
+  return customerFieldChoices.value.filter((f) => !taken.has(f.fieldname))
+})
+async function loadCustomerFieldChoices() {
+  if (customerFieldChoices.value.length || session.offline) return
+  try {
+    customerFieldChoices.value = await call('lumen_restaurants.customer_form.field_choices')
+  } catch (e) {
+    session.notify(e.message, true)
+  }
+}
+function addCustomerField() {
+  const f = customerFieldChoices.value.find((x) => x.fieldname === customerFieldToAdd.value)
+  if (!f) return
+  generalForm.value.customer_form_fields.push({
+    fieldname: f.fieldname,
+    label: f.label,
+    builtin: 0,
+    fieldtype: f.fieldtype,
+    for_individuals: 'Optional',
+    for_companies: 'Optional',
+  })
+  customerFieldToAdd.value = ''
+}
+
+// ---- other currencies: today's selling rate of each, per company currency ----
+// The currency rows as the form edits them.
+function currencyRows(info) {
+  return (info.sale_currencies || []).map((r) => ({
+    setup_error: r.setup_error || '',
+    currency: r.currency,
+    show_equivalent: r.show_equivalent ? 1 : 0,
+    change_in_currency: r.change_in_currency ? 1 : 0,
+    walk_in_customer: r.walk_in_customer || '',
+    cash_mode: r.cash_mode || '',
+    rate_source: r.rate_source || 'Fixed',
+    rate_margin: r.rate_margin || 0,
+    auto_status: r.auto_status || {},
+  }))
+}
+const rateRows = ref([])
+function loadRateRows(info) {
+  rateRows.value = (info.sale_currencies || []).flatMap((row) =>
+    (row.rates || []).map((r) => ({
+      currency: r.currency,
+      company_currency: r.company_currency,
+      rate: r.rate || 0,
+      draft: r.rate ? String(r.rate) : '',
+      busy: false,
+      auto: Boolean(info.auto_rates_enabled && row.rate_source === 'Automatic'),
+    }))
+  )
+}
+// "1 ZWG = 0.037551 USD", and the other way round when the number is small:
+// "1 USD = 26.63 ZWG" is how a shop reads a weak currency.
+function rateBoth(code, base, rate) {
+  if (!rate) return ''
+  const line = `1 ${code} = ${rateText(rate)} ${base}`
+  return isolate(rate < 1 ? `${line} (1 ${base} = ${rateText(1 / rate)} ${code})` : line)
+}
+const ratesBusy = ref(false)
+async function updateRatesNow() {
+  ratesBusy.value = true
+  try {
+    await call('lumen_restaurants.currency.update_rates_now')
+    const info = await call('lumen_restaurants.api.settings.get_settings')
+    settingsInfo.value = info
+    generalForm.value.sale_currencies = currencyRows(info)
+    loadRateRows(info)
+    const failed = (info.sale_currencies || []).some((r) => Object.values(r.auto_status || {}).some((s) => s.error))
+    session.notify(failed ? t('Some rates could not be updated, the reason is under each currency.') : t('Exchange rates updated'), failed)
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    ratesBusy.value = false
+  }
+}
+
+async function saveRate(row) {
+  const rate = parseMoney(row.draft)
+  if (!rate || rate <= 0) {
+    session.notify(t('Enter the rate as a number, e.g. 3.6725'), true)
+    return
+  }
+  row.busy = true
+  try {
+    await call('lumen_restaurants.currency.set_rate', {
+      currency: row.currency,
+      company_currency: row.company_currency,
+      rate,
+    })
+    row.rate = rate
+    session.notify(t('Rate saved. A shift that already sold in {currency} keeps its rate.', { currency: row.currency }))
+    // The till reads the rates at start: pick the new one up now.
+    await session.bootstrap(session.posProfile)
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    row.busy = false
+  }
+}
+
+// ---- return restrictions (POS Return Restriction) ----
+// Saved one at a time through their own endpoints, not with the General form.
+const returnRestrictions = ref([])
+const restrictionForm = ref(null)
+const restrictionBusy = ref(false)
+
+async function loadReturnRestrictions() {
+  returnRestrictions.value = await call('lumen_restaurants.api.settings.list_return_restrictions').catch(() => [])
+}
+
+function restrictionSummary(rule) {
+  const target = rule.item_code || rule.item_group || rule.brand || rule.tag || '-'
+  const where = (rule.pos_profiles || []).length
+    ? (rule.pos_profiles || []).join(', ')
+    : t('every outlet')
+  const scope = t(rule.applies_to || 'Item Group')
+  return rule.note
+    ? `${scope}: ${target} · ${where} · ${rule.note}`
+    : `${scope}: ${target} · ${where}`
+}
+
+function newReturnRestriction() {
+  restrictionForm.value = {
+    name: null, title: '', enabled: 1, applies_to: 'Item Group', value: '', label: '',
+    allow_with_approval: 1, note: '', pos_profiles: [],
+  }
+}
+
+function editReturnRestriction(rule) {
+  restrictionForm.value = {
+    name: rule.name,
+    title: rule.title || '',
+    enabled: rule.enabled ? 1 : 0,
+    applies_to: rule.applies_to || 'Item Group',
+    value: rule.item_code || rule.item_group || rule.brand || rule.tag || '',
+    label: '',
+    allow_with_approval: rule.allow_with_approval ? 1 : 0,
+    note: rule.note || '',
+    pos_profiles: [...(rule.pos_profiles || [])],
+  }
+}
+
+async function saveReturnRestriction() {
+  const form = restrictionForm.value
+  if (!form.title.trim() || !form.value) {
+    session.notify(t('Name the rule and pick what it applies to'), true)
+    return
+  }
+  restrictionBusy.value = true
+  try {
+    await call('lumen_restaurants.api.settings.save_return_restriction', {
+      payload: JSON.stringify({
+        name: form.name,
+        title: form.title.trim(),
+        enabled: form.enabled,
+        applies_to: form.applies_to,
+        item_code: form.applies_to === 'Item' ? form.value : null,
+        item_group: form.applies_to === 'Item Group' ? form.value : null,
+        brand: form.applies_to === 'Brand' ? form.value : null,
+        tag: form.applies_to === 'Tag' ? form.value : null,
+        allow_with_approval: form.allow_with_approval,
+        note: form.note,
+        pos_profiles: form.pos_profiles,
+      }),
+    })
+    restrictionForm.value = null
+    await loadReturnRestrictions()
+    session.notify(t('Return restriction saved'))
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    restrictionBusy.value = false
+  }
+}
+
+async function deleteReturnRestriction(rule) {
+  if (!confirm(t('Delete the restriction "{title}"?', { title: rule.title }))) return
+  try {
+    await call('lumen_restaurants.api.settings.delete_return_restriction', { name: rule.name })
+    if (restrictionForm.value && restrictionForm.value.name === rule.name) restrictionForm.value = null
+    await loadReturnRestrictions()
+  } catch (e) {
+    session.notify(e.message, true)
+  }
+}
+
+// ---- per-company accounts ----
+const selectedCompany = ref(session.company || '')
+const companies = computed(() => settingsInfo.value.companies || [])
+const companyRow = computed(
+  () =>
+    generalForm.value.company_settings.find((r) => r.company === selectedCompany.value) || {
+      gift_card_account: '',
+      service_charge_account: '',
+      cashback_liability_account: '',
+      cashback_expense_account: '',
+      deposit_account: '',
+      group_receivable_account: '',
+      group_payable_account: '',
+    }
+)
+
+// ---- receipt designer ----
+const RECEIPT_TEMPLATES = ['Compact', 'Standard', 'Detailed']
+const sampleReceipt = {
+  name: 'INV-2026-00042',
+  company: session.company || 'Your Store',
+  customer_name: 'Walk-in Customer',
+  sales_person: 'Cashier',
+  posting_date: '2026-06-30',
+  posting_time: '14:32:00',
+  note: 'Gift wrap requested',
+  is_return: false,
+  items: [
+    { item_code: 'BACKPACK', item_name: 'Backpack', barcode: '6291041500213', serial_no: null, qty: 1, rate: 500, amount: 500 },
+    { item_code: 'CAMERA-DSLR', item_name: 'DSLR Camera', barcode: '6291041500220', serial_no: 'SN-00123', qty: 1, rate: 900, amount: 900 },
+  ],
+  discount_amount: 0,
+  taxes: [{ description: 'VAT 15%', tax_amount: 182.61 }],
+  grand_total: 1400,
+  rounded_total: 1400,
+  payments: [{ mode_of_payment: 'Mada', amount: 1400 }],
+  loyalty_amount: 0,
+  change_amount: 0,
+  applied_promotions: [],
+  loyalty_points_earned: 14,
+}
+
+// ---- per-outlet receipt overrides ----
+const RECEIPT_KEYS = [
+  'receipt_template', 'receipt_logo', 'receipt_header', 'receipt_footer',
+  'receipt_show_item_code', 'receipt_show_barcode', 'receipt_show_serial',
+  'receipt_show_unit_price', 'receipt_show_payments', 'receipt_show_note',
+  'receipt_show_tax_id', 'receipt_tax_id', 'receipt_show_address',
+  'receipt_address', 'receipt_show_terms', 'receipt_terms',
+]
+const posProfiles = computed(() => settingsInfo.value.pos_profiles || [])
+const profileReceiptOverrides = ref([])
+const receiptScope = ref('') // '' = global default, else a POS Profile name
+const profileReceiptForm = ref({})
+const receiptHasOverride = ref(false)
+// The designer + preview bind to this: the GLOBAL form by default, or a
+// per-outlet form when an outlet is selected. Editing an outlet never touches
+// the global form, so the main Save can never clobber the global receipt.
+const receiptForm = computed(() =>
+  receiptScope.value ? profileReceiptForm.value : generalForm.value
+)
+
+async function onReceiptScopeChange() {
+  if (!receiptScope.value) return // back to the global default form
+  try {
+    const res = await call('lumen_restaurants.api.settings.get_profile_receipt', {
+      pos_profile: receiptScope.value,
+    })
+    profileReceiptForm.value = res.config || {}
+    profileReceiptCustomFields.value = res.custom_fields || []
+    receiptHasOverride.value = !!res.has_override
+  } catch (e) {
+    session.notify(e.message, true)
+    receiptScope.value = ''
+  }
+}
+
+async function saveProfileReceipt() {
+  const profile = receiptScope.value
+  if (!profile) return
+  const config = {}
+  for (const k of RECEIPT_KEYS) config[k] = profileReceiptForm.value[k]
+  try {
+    await call('lumen_restaurants.api.settings.save_profile_receipt', {
+      pos_profile: profile,
+      config: JSON.stringify(config),
+      custom_fields: JSON.stringify(profileReceiptCustomFields.value),
+    })
+    if (!profileReceiptOverrides.value.includes(profile)) {
+      profileReceiptOverrides.value = [...profileReceiptOverrides.value, profile]
+    }
+    receiptHasOverride.value = true
+    session.notify(t('Receipt saved for {outlet}', { outlet: profile }))
+  } catch (e) {
+    session.notify(e.message, true)
+  }
+}
+
+async function resetProfileReceipt() {
+  const profile = receiptScope.value
+  if (!profile) return
+  try {
+    await call('lumen_restaurants.api.settings.clear_profile_receipt', { pos_profile: profile })
+    profileReceiptOverrides.value = profileReceiptOverrides.value.filter((p) => p !== profile)
+    await onReceiptScopeChange() // reload, now seeds from the global default
+    session.notify(t('{outlet} now uses the default receipt', { outlet: profile }))
+  } catch (e) {
+    session.notify(e.message, true)
+  }
+}
+
+// ---- receipt custom fields (dynamic, from POS Profile / sale invoice) ----
+const fieldOptions = ref({}) // source -> [{ fieldname, label, fieldtype }]
+const profileReceiptCustomFields = ref([]) // the selected outlet's extra fields
+// The list currently being edited: the global list (generalForm) at default
+// scope, or the outlet's extras when an outlet is picked in the scope selector.
+const customFields = computed(() =>
+  receiptScope.value
+    ? profileReceiptCustomFields.value
+    : generalForm.value.receipt_custom_fields || []
+)
+
+async function loadFieldOptions(source) {
+  if (!source || fieldOptions.value[source]) return
+  try {
+    const opts = await call('lumen_restaurants.api.settings.receipt_field_options', { source })
+    fieldOptions.value = { ...fieldOptions.value, [source]: opts }
+  } catch {
+    /* ignore, the picker just stays empty */
+  }
+}
+
+function addCustomField() {
+  customFields.value.push({
+    source: 'Sale Invoice',
+    fieldname: '',
+    label: '',
+    render: 'Text',
+    position: 'Footer',
+  })
+  loadFieldOptions('Sale Invoice')
+}
+
+function onCfSource(row) {
+  row.fieldname = ''
+  loadFieldOptions(row.source)
+}
+
+function cfLabel(row) {
+  if (row.label) return row.label
+  const o = (fieldOptions.value[row.source] || []).find((x) => x.fieldname === row.fieldname)
+  return (o && o.label) || row.fieldname
+}
+
+// A tiny placeholder image so the preview shows where an Image/QR field lands.
+const SAMPLE_CF_IMG =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="88" height="88"><rect width="88" height="88" fill="#111"/><rect x="12" y="12" width="64" height="64" fill="#fff"/><rect x="24" y="24" width="40" height="40" fill="#111"/><rect x="36" y="36" width="16" height="16" fill="#fff"/></svg>'
+  )
+
+const previewReceipt = computed(() => ({
+  ...sampleReceipt,
+  custom_fields: customFields.value
+    .filter((r) => r.fieldname)
+    .map((r) => ({
+      label: cfLabel(r),
+      value: r.render === 'Image' ? SAMPLE_CF_IMG : t('Sample value'),
+      render: r.render,
+      position: r.position,
+    })),
+}))
+
+// ---- audit log viewer ----
+const AUDIT_ACTIONS = [
+  'Sale', 'Return', 'Over-limit discount', 'Price edit',
+  'Register open', 'Register close', 'ERPNext day closed', 'Settings change', 'Email receipt', 'Till unlock',
+  'Customer payment', 'Customer credit', 'Reprint',
+]
+const auditLogs = ref([])
+const auditFilter = ref({ action: '', from_date: '', to_date: '' })
+const auditLoading = ref(false)
+const auditMore = ref(false)
+const AUDIT_PAGE = 50
+
+async function loadAudit(append = false) {
+  auditLoading.value = true
+  try {
+    const rows = await call('lumen_restaurants.api.audit.list_logs', {
+      action: auditFilter.value.action || undefined,
+      from_date: auditFilter.value.from_date || undefined,
+      to_date: auditFilter.value.to_date || undefined,
+      start: append ? auditLogs.value.length : 0,
+      limit: AUDIT_PAGE,
+    })
+    auditLogs.value = append ? [...auditLogs.value, ...rows] : rows
+    auditMore.value = rows.length === AUDIT_PAGE
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    auditLoading.value = false
+  }
+}
+const reloadAudit = () => loadAudit(false)
+const loadMoreAudit = () => loadAudit(true)
+
+// Load the audit log the first time its tab is opened (and refresh on re-entry).
+watch(activeTab, (tab) => {
+  if (tab === 'Audit Log') loadAudit(false)
+  if (tab === 'System check' && !check.value) runCheck()
+})
+
+// ---- system check (lumen_restaurants.api.system_check) ----
+const check = ref(null)
+const checking = ref(false)
+const checkError = ref('')
+const CHECK_AREAS = [
+  { key: 'shifts', label: 'Shifts' },
+  { key: 'outlets', label: 'Outlets' },
+  { key: 'settings', label: 'Settings' },
+  { key: 'errors', label: 'Errors and background jobs' },
+  { key: 'versions', label: 'Versions' },
+]
+const LEVEL_ORDER = { problem: 0, warn: 1, info: 2, ok: 3 }
+const LEVEL_LABEL = { problem: 'Problem', warn: 'Attention', info: 'Note', ok: 'OK' }
+const checkRows = (area) =>
+  (check.value?.rows || [])
+    .filter((r) => r.area === area)
+    .sort((a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level])
+
+async function runCheck() {
+  if (session.offline) return
+  checking.value = true
+  checkError.value = ''
+  try {
+    check.value = await call('lumen_restaurants.api.system_check.run', {})
+  } catch (e) {
+    checkError.value = e.message || String(e)
+  } finally {
+    checking.value = false
+  }
+}
+
+// The page as plain text, to paste into a message to support.
+async function copyCheck() {
+  const c = check.value
+  if (!c) return
+  const v = c.versions
+  const lines = [
+    t('System check') + ', ' + c.site + ', ' + c.checked_at,
+    'Lumen Restaurants ' + v.lumenpos + ', ERPNext ' + v.erpnext + ', Frappe ' + v.frappe + ', Python ' + v.python,
+  ]
+  for (const area of CHECK_AREAS) {
+    const rows = checkRows(area.key)
+    if (!rows.length) continue
+    lines.push('', t(area.label))
+    for (const r of rows) {
+      lines.push('[' + t(LEVEL_LABEL[r.level]) + '] ' + r.title + (r.detail ? ': ' + r.detail : ''))
+      for (const item of r.items || []) lines.push('  - ' + item)
+      if (r.fix) lines.push('  ' + t('What to do:') + ' ' + r.fix)
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(lines.join('\n'))
+    session.notify(t('Copied. Paste it into your message to support.'))
+  } catch {
+    session.notify(t('This browser did not allow copying. Take a screenshot instead.'), true)
+  }
+}
+
+// Payment methods offered in the refund-rule dropdowns.
+const payModeOptions = computed(() => {
+  const modes = (session.paymentModes || []).map((m) => m.mode_of_payment)
+  if (session.storeCreditMode && !modes.includes(session.storeCreditMode)) {
+    modes.push(session.storeCreditMode)
+  }
+  return modes
+})
+
+const hasInvalidRows = computed(() =>
+  (promoForm.value.items || []).some((row) => !row.value)
+)
+const hasInvalidCashbackRows = computed(() =>
+  (cashbackForm.value.items || []).some((row) => !row.value)
+)
+
+const modeHint = computed(() => {
+  const m = generalForm.value.discount_approval_mode
+  if (m === 'Request only')
+    return t('The cashier sends a request, a role-holder approves it while the register is open. No till passcode.')
+  if (m === 'Passcode or request')
+    return t('The cashier can either enter the manager passcode at the till or send a request for remote approval.')
+  return t('A manager enters the passcode at the till to clear an over-limit discount.')
+})
+
+onMounted(() => {
+  activeTab.value = tabs.value.includes('Promotions') ? 'Promotions' : tabs.value[0] || 'Status'
+  load()
+})
+
+async function load() {
+  cachedItems.value = await catalogCount().catch(() => 0)
+  cachedCustomers.value = await customerCount().catch(() => 0)
+  persisted.value = await storagePersisted()
+  shellReady.value = Boolean(navigator.serviceWorker && navigator.serviceWorker.controller)
+  loadIndexHealth()
+  if (session.offline) return
+  loadTables()
+  const info = await call('lumen_restaurants.api.settings.get_settings')
+  settingsInfo.value = info
+  reasonKeys.value = [...(info.variance_reasons || []), ...(info.return_reasons || [])]
+  profileReceiptOverrides.value = info.profile_receipt_overrides || []
+  loadFieldOptions('Sale Invoice')
+  loadFieldOptions('POS Profile')
+  loadRateRows(info)
+  generalForm.value = {
+    till_languages: [...(info.till_languages || [])],
+    delivery_apps: JSON.parse(JSON.stringify(info.delivery_apps || [])),
+    payment_method_rules: JSON.parse(JSON.stringify(info.payment_method_rules || [])),
+    discount_limit_percent: info.discount_limit_percent || 0,
+    discount_passcode: '',
+    discount_approval_mode: info.discount_approval_mode || 'Passcode only',
+    approver_role: info.approver_role || '',
+    cash_out_reason_required: info.cash_out_reason_required ? 1 : 0,
+    cash_out_approval: info.cash_out_approval || 'Off',
+    cash_out_approval_amount: info.cash_out_approval_amount || 0,
+    price_edit_role: info.price_edit_role || '',
+    return_role: info.return_role || '',
+    return_exceed_role: info.return_exceed_role || '',
+    exchange_role: info.exchange_role || '',
+    enable_layaway: info.enable_layaway ? 1 : 0,
+    enable_multi_currency: info.enable_multi_currency ? 1 : 0,
+    auto_rates_enabled: info.auto_rates_enabled ? 1 : 0,
+    sale_currencies: currencyRows(info),
+    customer_form_fields: (info.customer_form_fields || []).map((r) => ({ ...r })),
+    balances_across_companies: info.balances_across_companies || 'Shared by the group',
+    layaway_reserve_stock: info.layaway_reserve_stock ? 1 : 0,
+    deposit_with_tax: info.deposit_with_tax ? 1 : 0,
+    layaway_days: info.layaway_days || 0,
+    layaway_min_percent: info.layaway_min_percent || 0,
+    capability_rules: (info.capability_rules || []).map((r) => ({ ...r })),
+    restrict_returns_to_window: info.restrict_returns_to_window || 0,
+    return_window_days: info.return_window_days ?? 14,
+    offline_stock_only: info.offline_stock_only || 0,
+    // A server from before 0.56.0 does not send these: on, their default.
+    offline_returns: info.offline_returns === 0 ? 0 : 1,
+    background_upload: info.background_upload === 0 ? 0 : 1,
+    warn_unprotected_storage: info.warn_unprotected_storage === 0 ? 0 : 1,
+    // A server from before 0.58.0 does not send these: on, their default.
+    help_in_till: info.help_in_till === 0 ? 0 : 1,
+    help_offer_tour: info.help_offer_tour === 0 ? 0 : 1,
+    help_whats_new: info.help_whats_new === 0 ? 0 : 1,
+    shift_scope: info.shift_scope || 'Per cashier',
+    one_shift_per_user: info.one_shift_per_user ? 1 : 0,
+    // A server from before 0.55.0 does not send it: on, its default.
+    carry_shift_past_midnight: info.carry_shift_past_midnight === 0 ? 0 : 1,
+    // And before 0.58.1.
+    warn_locked_periods: info.warn_locked_periods === 0 ? 0 : 1,
+    // And before 0.59.0 (lumen_restaurants.variance).
+    variance_reason_mode: info.variance_reason_mode || 'Optional',
+    variance_reason_threshold: info.variance_reason_threshold || 0,
+    variance_reasons: [...(info.variance_reasons || [])],
+    // And before 0.60.0 (lumen_restaurants.credit_sales).
+    credit_sales_enabled: info.credit_sales_enabled ? 1 : 0,
+    credit_customers: info.credit_customers || 'Customers allowed on their card',
+    credit_default_limit: info.credit_default_limit || 0,
+    variance_alert_enabled: info.variance_alert_enabled || 0,
+    variance_alert_threshold: info.variance_alert_threshold || 0,
+    variance_alert_role: info.variance_alert_role || '',
+    overdue_alert_enabled: info.overdue_alert_enabled || 0,
+    overdue_alert_role: info.overdue_alert_role || '',
+    overdue_alert_hours: info.overdue_alert_hours || 14,
+    overdue_grace_minutes: info.overdue_grace_minutes || 60,
+    show_out_of_stock: info.show_out_of_stock || 0,
+    serial_scan_only: info.serial_scan_only || 0,
+    enable_order_discount: info.enable_order_discount ?? 1,
+    enable_service_charge: info.enable_service_charge || 0,
+    service_charge_percent: info.service_charge_percent || 0,
+    service_charge_account: info.service_charge_account || '',
+    enable_price_checker: info.enable_price_checker ?? 1,
+    salesperson_mode: info.salesperson_mode || 'Optional',
+    enable_insights: info.enable_insights ?? 1,
+    enable_cashback: info.enable_cashback ?? 1,
+    enable_xreport: info.enable_xreport ?? 1,
+    enable_audit_log: info.enable_audit_log ?? 1,
+    enable_email_receipt: info.enable_email_receipt || 0,
+    enable_customer_display: info.enable_customer_display || 0,
+    enable_till_lock: info.enable_till_lock || 0,
+    auto_lock_minutes: info.auto_lock_minutes || 0,
+    enable_quick_keys: info.enable_quick_keys || 0,
+    quick_keys: (info.quick_keys || []).map((r) => ({ item_code: r.item_code, label: r.label || '' })),
+    receipt_template: info.receipt_template || 'Standard',
+    receipt_logo: info.receipt_logo || '',
+    receipt_header: info.receipt_header || '',
+    receipt_footer: info.receipt_footer || '',
+    receipt_show_item_code: info.receipt_show_item_code || 0,
+    receipt_show_barcode: info.receipt_show_barcode || 0,
+    receipt_show_serial: info.receipt_show_serial ?? 1,
+    receipt_show_unit_price: info.receipt_show_unit_price ?? 1,
+    receipt_show_payments: info.receipt_show_payments ?? 1,
+    receipt_show_note: info.receipt_show_note ?? 1,
+    receipt_show_tax_id: info.receipt_show_tax_id || 0,
+    receipt_tax_id: info.receipt_tax_id || '',
+    receipt_show_address: info.receipt_show_address || 0,
+    receipt_address: info.receipt_address || '',
+    receipt_show_terms: info.receipt_show_terms || 0,
+    receipt_terms: info.receipt_terms || '',
+    receipt_custom_fields: JSON.parse(JSON.stringify(info.receipt_custom_fields || [])),
+    company_settings: (info.company_settings || []).map((r) => ({ ...r })),
+    gift_card_expiry_days: info.gift_card_expiry_days || 0,
+    gift_card_mode_of_payment: info.gift_card_mode_of_payment || '',
+    gift_card_account: info.gift_card_account || '',
+    gift_card_item: info.gift_card_item || '',
+    restrict_refund_to_paid_mode: info.restrict_refund_to_paid_mode ?? 1,
+    // Not read here from 0.29.0 to 0.57.0: every Save of this tab switched it off.
+    allow_store_credit_refund: info.allow_store_credit_refund ? 1 : 0,
+    refund_rules: JSON.parse(JSON.stringify(info.refund_rules || [])),
+    return_reasons: [...(info.return_reasons || [])],
+    approvers: (info.approvers || []).map((approver) => ({
+      approver_name: approver.approver_name,
+      has_passcode: approver.has_passcode,
+      passcode: '',
+    })),
+  }
+  // One editable row per company for the Company Accounts picker (empty rows
+  // are dropped on save).
+  for (const c of info.companies || []) {
+    if (!generalForm.value.company_settings.some((r) => r.company === c)) {
+      generalForm.value.company_settings.push({
+        company: c,
+        gift_card_account: '',
+        service_charge_account: '',
+        cashback_liability_account: '',
+        cashback_expense_account: '',
+        deposit_account: '',
+        group_receivable_account: '',
+        group_payable_account: '',
+      })
+    }
+  }
+  loadInterCompany()
+  if ((info.companies || []).length && !info.companies.includes(selectedCompany.value)) {
+    selectedCompany.value = info.companies[0]
+  }
+  promotions.value = await call('lumen_restaurants.api.settings.list_promotions')
+  if (perms.value.cashback?.read) {
+    cashbackRules.value = await call('lumen_restaurants.api.settings.list_cashback_rules').catch(() => [])
+    loadCashbackAccounting()
+  }
+  priceBooks.value = await call('lumen_restaurants.api.settings.list_price_books')
+  bundles.value = await call('lumen_restaurants.api.settings.list_bundles')
+  loyaltyPrograms.value = await call('lumen_restaurants.api.settings.list_loyalty_programs').catch(() => [])
+  loadGiftCards()
+  if (perms.value.settings) loadReturnRestrictions()
+}
+
+// ---- loyalty & gift cards ----
+async function saveLoyalty() {
+  saving.value = true
+  try {
+    await call('lumen_restaurants.api.settings.create_loyalty_program', {
+      payload: { ...loyaltyForm.value, company: loyaltyForm.value.company || session.company },
+    })
+    session.notify(t('Loyalty program created, earning starts on the next sale'))
+    creatingLoyalty.value = false
+    loyaltyPrograms.value = await call('lumen_restaurants.api.settings.list_loyalty_programs')
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    saving.value = false
+  }
+}
+
+function debouncedLoadCards() {
+  clearTimeout(cardTimer)
+  cardTimer = setTimeout(loadGiftCards, 300)
+}
+
+async function loadGiftCards() {
+  giftCardList.value = await call('lumen_restaurants.api.settings.list_gift_cards', {
+    search: giftCardSearch.value,
+  }).catch(() => [])
+}
+
+async function disableCard(card) {
+  if (!confirm(t('Disable gift card {card}? Its remaining balance becomes unusable.', { card: card.card_no }))) return
+  try {
+    await call('lumen_restaurants.api.settings.disable_gift_card', { card_no: card.card_no })
+    loadGiftCards()
+  } catch (e) {
+    session.notify(e.message, true)
+  }
+}
+
+// ---- bundles ----
+function newBundle() {
+  bundleForm.value = {
+    title: '', status: 'Active', bundle_price: 0,
+    valid_from: null, valid_to: null,
+    items: [{ item_code: '', label: '', qty: 1 }],
+    company: '',
+    pos_profiles: [],
+  }
+  editingBundle.value = true
+}
+
+function editBundle(bundle) {
+  bundleForm.value = {
+    name: bundle.name,
+    title: bundle.title,
+    status: bundle.status,
+    bundle_price: bundle.bundle_price,
+    valid_from: bundle.valid_from || null,
+    valid_to: bundle.valid_to || null,
+    items: bundle.items.map((row) => ({
+      item_code: row.item_code,
+      label: row.item_name || row.item_code,
+      qty: row.qty,
+      allocated_amount: row.allocated_amount || null,
+    })),
+    company: bundle.company || '',
+    pos_profiles: [...(bundle.pos_profiles || [])],
+  }
+  editingBundle.value = true
+}
+
+const allocationTotal = computed(() =>
+  (bundleForm.value.items || []).reduce(
+    (sum, row) => sum + (Number(row.allocated_amount) || 0),
+    0
+  )
+)
+
+const taxSummary = computed(() => {
+  const taxes = session.taxes || []
+  if (!taxes.length) return t('No tax template')
+  return taxes
+    .map((tax) => {
+      const label = tax.rate ? `${tax.description || t('Tax')} ${tax.rate}%` : tax.description || t('Tax')
+      return tax.included
+        ? t('{label} (included in price)', { label })
+        : t('{label} (added on top)', { label })
+    })
+    .join(', ')
+})
+
+const allocationState = computed(() => {
+  const rows = (bundleForm.value.items || []).filter((row) => row.item_code)
+  if (!rows.length) return 'none'
+  const filled = rows.filter((row) => Number(row.allocated_amount) > 0)
+  if (!filled.length) return 'none'
+  if (filled.length !== rows.length) return 'partial'
+  return Math.abs(allocationTotal.value - (Number(bundleForm.value.bundle_price) || 0)) <= 0.01
+    ? 'ok'
+    : 'mismatch'
+})
+
+async function saveBundle() {
+  saving.value = true
+  try {
+    const payload = JSON.parse(JSON.stringify(bundleForm.value))
+    payload.items = payload.items.filter((row) => row.item_code)
+    await call('lumen_restaurants.api.settings.save_bundle', { payload })
+    session.notify(t('Bundle saved'))
+    editingBundle.value = false
+    bundles.value = await call('lumen_restaurants.api.settings.list_bundles')
+    session.bundles = bundles.value.filter((bundle) => bundle.status === 'Active')
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    saving.value = false
+  }
+}
+
+async function deleteBundle() {
+  if (!confirm(t('Delete bundle "{title}"?', { title: bundleForm.value.title }))) return
+  try {
+    await call('lumen_restaurants.api.settings.delete_bundle', { name: bundleForm.value.name })
+    editingBundle.value = false
+    bundles.value = await call('lumen_restaurants.api.settings.list_bundles')
+    session.bundles = bundles.value.filter((bundle) => bundle.status === 'Active')
+  } catch (e) {
+    session.notify(e.message, true)
+  }
+}
+
+// ---- promotions ----
+function newPromotion() {
+  promoForm.value = {
+    title: '', status: 'Active', promotion_type: 'Simple Discount',
+    start_date: null, end_date: null, start_time: null, end_time: null,
+    monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 1, sunday: 1,
+    stackable: 0, priority: 1, requires_coupon: 0, coupon_code: '',
+    price_basis: 'Price Book Price',
+    customer_eligibility: 'All Customers', apply_on_all: 0,
+    discount_type: 'Percentage', discount_value: 0,
+    buy_qty: 2, get_qty: 1, get_discount_type: 'Free', get_discount_value: 0, max_applications: 0,
+    min_spend: 0, basket_discount_type: 'Percentage', basket_discount_value: 0,
+    bundle_price: 0,
+    company: '',
+    pos_profiles: [], customer_groups: [], items: [],
+  }
+  couponStats.value = null
+  couponMsg.value = ''
+  editingPromo.value = true
+}
+
+// --- bulk coupon pool ---
+const couponStats = ref(null)
+const couponBusy = ref(false)
+const couponMsg = ref('')
+const couponFileInput = ref(null)
+const couponGen = ref({ count: 50, prefix: '', usage_limit: 1, valid_until: '' })
+const couponImp = ref({ usage_limit: 1, valid_until: '' })
+
+async function loadCouponStats() {
+  couponStats.value = null
+  couponMsg.value = ''
+  if (!promoForm.value.name) return
+  try {
+    couponStats.value = await call('lumen_restaurants.api.settings.list_coupons', {
+      promotion: promoForm.value.name,
+    })
+  } catch {
+    /* ignore, coupon tools just won't show counts */
+  }
+}
+
+async function generateCoupons() {
+  if (!couponGen.value.count) return
+  couponBusy.value = true
+  couponMsg.value = ''
+  try {
+    const res = await call('lumen_restaurants.api.settings.generate_coupons', {
+      promotion: promoForm.value.name,
+      count: couponGen.value.count,
+      prefix: couponGen.value.prefix || '',
+      usage_limit: couponGen.value.usage_limit ?? 1,
+      valid_until: couponGen.value.valid_until || null,
+    })
+    couponStats.value = {
+      total: res.total,
+      used: res.used,
+      available: res.available,
+      redemptions: res.redemptions,
+    }
+    couponMsg.value = t('Generated {n} codes, click "Export codes" to download them', { n: res.created })
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    couponBusy.value = false
+  }
+}
+
+function importCoupons(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = async () => {
+    couponBusy.value = true
+    couponMsg.value = ''
+    try {
+      const res = await call('lumen_restaurants.api.settings.import_coupons', {
+        promotion: promoForm.value.name,
+        filename: file.name,
+        content: reader.result,
+        usage_limit: couponImp.value.usage_limit ?? 1,
+        valid_until: couponImp.value.valid_until || null,
+      })
+      couponStats.value = {
+      total: res.total,
+      used: res.used,
+      available: res.available,
+      redemptions: res.redemptions,
+    }
+      couponMsg.value = t('Imported {created} codes ({skipped} skipped)', {
+        created: res.created,
+        skipped: res.skipped,
+      })
+    } catch (e) {
+      session.notify(e.message, true)
+    } finally {
+      couponBusy.value = false
+    }
+  }
+  reader.readAsDataURL(file)
+}
+
+async function exportCoupons() {
+  couponBusy.value = true
+  try {
+    const rows = await call('lumen_restaurants.api.settings.export_coupons', { promotion: promoForm.value.name })
+    const header = 'code,single_use,used,valid_until,batch\n'
+    const body = rows
+      .map((r) =>
+        [r.code, r.single_use, r.used, r.valid_until || '', (r.batch || '').replace(/,/g, ' ')].join(',')
+      )
+      .join('\n')
+    const blob = new Blob([header + body], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `coupons-${promoForm.value.name}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    couponBusy.value = false
+  }
+}
+
+async function deleteUnusedCoupons() {
+  if (!confirm(t('Delete all unused coupons for this promotion?'))) return
+  couponBusy.value = true
+  try {
+    couponStats.value = await call('lumen_restaurants.api.settings.delete_coupons', {
+      promotion: promoForm.value.name,
+      only_unused: 1,
+    })
+    couponMsg.value = ''
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    couponBusy.value = false
+  }
+}
+
+async function editPromotion(name) {
+  const data = await call('lumen_restaurants.api.settings.get_promotion', { name })
+  data.items = (data.items || []).map((row) => ({
+    applies_to: row.applies_to || 'Item',
+    value: row.item_code || row.item_group || row.brand || row.tag || '',
+    label: row.item_code || row.item_group || row.brand || row.tag || '',
+    role: row.role || 'Buy',
+    qty: row.qty || 1,
+    exclude: row.exclude || 0,
+  }))
+  data.company = data.company || ''
+  promoForm.value = data
+  editingPromo.value = true
+  testResult.value = null
+  testBasket.value = [{ item_code: '', label: '', qty: 1 }]
+  loadCouponStats()
+}
+
+async function runTest() {
+  testing.value = true
+  testResult.value = null
+  try {
+    testResult.value = await call('lumen_restaurants.api.settings.test_promotion', {
+      name: promoForm.value.name,
+      pos_profile: session.posProfile,
+      items: testBasket.value
+        .filter((row) => row.item_code)
+        .map((row) => ({ item_code: row.item_code, qty: row.qty || 1 })),
+    })
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    testing.value = false
+  }
+}
+
+function addGroup(form, option) {
+  groupPick.value = ''
+  if (option?.name && !form.customer_groups.includes(option.name)) {
+    form.customer_groups.push(option.name)
+  }
+}
+
+async function savePromotion() {
+  if (hasInvalidRows.value) {
+    session.notify(t('Pick every product row from the dropdown list first'), true)
+    return
+  }
+  saving.value = true
+  try {
+    const payload = JSON.parse(JSON.stringify(promoForm.value))
+    payload.customer_eligibility = payload.customer_groups.length
+      ? 'Selected Customer Groups'
+      : 'All Customers'
+    payload.items = payload.items
+      .filter((row) => row.value)
+      .map((row) => ({
+        applies_to: row.applies_to,
+        item_code: row.applies_to === 'Item' ? row.value : null,
+        item_group: row.applies_to === 'Item Group' ? row.value : null,
+        brand: row.applies_to === 'Brand' ? row.value : null,
+        tag: row.applies_to === 'Tag' ? row.value : null,
+        role: row.role,
+        qty: row.qty,
+        exclude: row.exclude ? 1 : 0,
+      }))
+    await call('lumen_restaurants.api.settings.save_promotion', { payload })
+    session.notify(t('Promotion saved'))
+    editingPromo.value = false
+    promotions.value = await call('lumen_restaurants.api.settings.list_promotions')
+    session.refreshPromotions()
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    saving.value = false
+  }
+}
+
+async function deletePromotion() {
+  if (!confirm(t('Delete promotion "{title}"?', { title: promoForm.value.title }))) return
+  try {
+    await call('lumen_restaurants.api.settings.delete_promotion', { name: promoForm.value.name })
+    editingPromo.value = false
+    promotions.value = await call('lumen_restaurants.api.settings.list_promotions')
+    session.refreshPromotions()
+  } catch (e) {
+    session.notify(e.message, true)
+  }
+}
+
+// ---- cashback accounting ----
+async function loadCashbackAccounting() {
+  cashbackAccounting.value = await call('lumen_restaurants.api.settings.cashback_accounting_status').catch(() => [])
+}
+
+// The server sends a state code, not text, so the note follows the POS language.
+function cashbackAccountState(state) {
+  if (state === 'not_created_yet') return t('created on first use')
+  if (state === 'chosen_unusable') return t('the chosen account cannot be used, so this one is used instead')
+  return ''
+}
+
+async function bookCashbackNow() {
+  cashbackBooking.value = true
+  cashbackBookMsg.value = ''
+  cashbackBookFailed.value = false
+  try {
+    const res = await call('lumen_restaurants.api.settings.post_cashback_to_gl')
+    cashbackAccounting.value = res.status || []
+    const posted = (res.posted || []).length
+    const failed = (res.failed || []).length
+    cashbackBookFailed.value = failed > 0
+    cashbackBookMsg.value = failed
+      ? t('Booked {posted} journal entries. {failed} could not be booked, see the Error Log.', { posted, failed })
+      : t('Booked {posted} journal entries.', { posted })
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    cashbackBooking.value = false
+  }
+}
+
+// ---- cashback rules ----
+function newCashbackRule() {
+  cashbackForm.value = {
+    title: '', status: 'Active', description: '',
+    amount_type: 'Percentage', amount_value: 5, max_cashback: 0, min_spend: 0,
+    validity_days: 90, activation_delay_days: 0,
+    start_date: null, end_date: null, start_time: null, end_time: null,
+    monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 1, sunday: 1,
+    stackable: 0, priority: 1, requires_coupon: 0, coupon_code: '',
+    customer_eligibility: 'All Customers', apply_on_all: 1,
+    company: '',
+    pos_profiles: [], customer_groups: [], items: [],
+  }
+  editingCashback.value = true
+}
+
+async function editCashbackRule(name) {
+  const data = await call('lumen_restaurants.api.settings.get_cashback_rule', { name })
+  data.items = (data.items || []).map((row) => ({
+    applies_to: row.applies_to || 'Item',
+    value: row.item_code || row.item_group || row.brand || row.tag || '',
+    label: row.item_code || row.item_group || row.brand || row.tag || '',
+    exclude: row.exclude || 0,
+  }))
+  data.company = data.company || ''
+  cashbackForm.value = data
+  editingCashback.value = true
+}
+
+async function saveCashbackRule() {
+  if (hasInvalidCashbackRows.value) {
+    session.notify(t('Pick every product row from the dropdown list first'), true)
+    return
+  }
+  saving.value = true
+  try {
+    const payload = JSON.parse(JSON.stringify(cashbackForm.value))
+    payload.customer_eligibility = payload.customer_groups.length
+      ? 'Selected Customer Groups'
+      : 'All Customers'
+    payload.items = payload.items
+      .filter((row) => row.value)
+      .map((row) => ({
+        applies_to: row.applies_to,
+        item_code: row.applies_to === 'Item' ? row.value : null,
+        item_group: row.applies_to === 'Item Group' ? row.value : null,
+        brand: row.applies_to === 'Brand' ? row.value : null,
+        tag: row.applies_to === 'Tag' ? row.value : null,
+        exclude: row.exclude ? 1 : 0,
+      }))
+    await call('lumen_restaurants.api.settings.save_cashback_rule', { payload })
+    session.notify(t('Cashback rule saved'))
+    editingCashback.value = false
+    cashbackRules.value = await call('lumen_restaurants.api.settings.list_cashback_rules')
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    saving.value = false
+  }
+}
+
+async function deleteCashbackRule() {
+  if (!confirm(t('Delete cashback rule "{title}"?', { title: cashbackForm.value.title }))) return
+  try {
+    await call('lumen_restaurants.api.settings.delete_cashback_rule', { name: cashbackForm.value.name })
+    editingCashback.value = false
+    cashbackRules.value = await call('lumen_restaurants.api.settings.list_cashback_rules')
+  } catch (e) {
+    session.notify(e.message, true)
+  }
+}
+
+// ---- price books ----
+const bookItemPick = ref('')
+const bookFileInput = ref(null)
+const bookImporting = ref(false)
+const bookImportReport = ref(null)
+const bookFetch = ref({ by: 'Brand', value: '', label: '' })
+const bookFetching = ref(false)
+const bookBulk = ref({ percent: 10, round: '0' })
+
+function roundTo(value, step) {
+  step = Number(step) || 0
+  if (step <= 0) return Math.round((value + Number.EPSILON) * 100) / 100
+  return Math.round((value / step) + Number.EPSILON) * step
+}
+
+// Discount every item's book price by a % at once, with optional rounding to
+// the nearest step. Applies to each row's CURRENT price.
+function applyBulkDiscount() {
+  const pct = Number(bookBulk.value.percent) || 0
+  const items = bookForm.value.items || []
+  if (!items.length) return
+  if (!confirm(t('Apply a {pct}% discount to all {n} item prices?', { pct, n: items.length }))) return
+  for (const row of items) {
+    const base = Number(row.rate) || 0
+    row.rate = roundTo(base * (1 - pct / 100), bookBulk.value.round)
+  }
+}
+
+// Bulk-add every sellable item in a brand / item group / tag to the price book,
+// each defaulted to its current selling price (the manager then discounts).
+async function fetchBookItems() {
+  if (!bookFetch.value.value) return
+  bookFetching.value = true
+  bookImportReport.value = null
+  try {
+    const args = {}
+    if (bookFetch.value.by === 'Brand') args.brand = bookFetch.value.value
+    else if (bookFetch.value.by === 'Item Group') args.item_group = bookFetch.value.value
+    else args.tag = bookFetch.value.value
+    const rows = await call('lumen_restaurants.api.settings.resolve_items', args)
+    let added = 0
+    for (const r of rows) {
+      if (!bookForm.value.items.some((x) => x.item_code === r.item_code)) {
+        bookForm.value.items.push({ item_code: r.item_code, item_name: r.item_name, rate: r.rate || 0 })
+        added++
+      }
+    }
+    bookImportReport.value = { added, errors: [] }
+    bookFetch.value = { by: bookFetch.value.by, value: '', label: '' }
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    bookFetching.value = false
+  }
+}
+
+function newBook() {
+  bookForm.value = {
+    title: '', status: 'Active', priority: 1,
+    valid_from: null, valid_to: null,
+    company: '',
+    pos_profiles: [], customer_groups: [], items: [],
+  }
+  bookImportReport.value = null
+  editingBook.value = true
+}
+
+// Base selling lists must not be used as a DELIVERY-APP price list (apps still
+// map to a real ERPNext Price List; editing a base list changes real prices).
+const protectedPriceLists = computed(() => settingsInfo.value.protected_price_lists || [])
+function isProtected(pl) {
+  return !!pl && protectedPriceLists.value.includes(pl)
+}
+
+function editBook(book) {
+  bookForm.value = {
+    ...JSON.parse(JSON.stringify(book)),
+    company: book.company || '',
+    items: (book.items || []).map((r) => ({ ...r })),
+  }
+  bookImportReport.value = null
+  editingBook.value = true
+}
+
+function addBookItem(option) {
+  bookItemPick.value = ''
+  if (!option?.name) return
+  if (!bookForm.value.items) bookForm.value.items = []
+  if (bookForm.value.items.some((r) => r.item_code === option.name)) {
+    session.notify(t('{item} is already in this book', { item: option.item_name || option.name }), true)
+    return
+  }
+  bookForm.value.items.unshift({
+    item_code: option.name,
+    item_name: option.item_name || option.name,
+    rate: null,
+  })
+}
+
+function importBookItems(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = async () => {
+    bookImporting.value = true
+    bookImportReport.value = null
+    try {
+      const res = await call('lumen_restaurants.api.settings.parse_price_rows', {
+        filename: file.name,
+        content: reader.result,
+      })
+      if (!bookForm.value.items) bookForm.value.items = []
+      let added = 0
+      for (const row of res.items || []) {
+        const existing = bookForm.value.items.find((r) => r.item_code === row.item_code)
+        if (existing) existing.rate = row.rate
+        else bookForm.value.items.push({ item_code: row.item_code, item_name: row.item_name, rate: row.rate })
+        added += 1
+      }
+      bookImportReport.value = { added, errors: res.errors || [] }
+      session.notify(t('Imported {n} item(s), review and Save', { n: added }))
+    } catch (e) {
+      session.notify(e.message, true)
+    } finally {
+      bookImporting.value = false
+      event.target.value = ''
+    }
+  }
+  reader.readAsDataURL(file)
+}
+
+function exportBookItems() {
+  const rows = [['Item Code', 'Item Name', 'Book Price']]
+  for (const r of bookForm.value.items || []) rows.push([r.item_code, r.item_name || '', r.rate ?? ''])
+  const csv = rows
+    .map((cols) => cols.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${bookForm.value.title || 'price-book'} - items.csv`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+async function newAppPriceList(app) {
+  const name = prompt(
+    t('Name for this app price list (e.g. "Jahez Prices"):'),
+    app.app_name ? t('{app} Prices', { app: app.app_name }) : ''
+  )
+  if (!name?.trim()) return
+  try {
+    app.price_list = await call('lumen_restaurants.api.settings.create_price_list', {
+      price_list_name: name.trim(),
+    })
+    session.notify(
+      t('Price list "{list}" created. Save Settings to link it to {app}', { list: app.price_list, app: app.app_name || t('this app') })
+    )
+  } catch (e) {
+    session.notify(e.message, true)
+  }
+}
+
+async function saveBook() {
+  if (!(bookForm.value.title || '').trim()) {
+    session.notify(t('Give the price book a name'), true)
+    return
+  }
+  saving.value = true
+  try {
+    const payload = {
+      ...bookForm.value,
+      items: (bookForm.value.items || [])
+        .filter((r) => r.item_code)
+        .map((r) => ({ item_code: r.item_code, rate: r.rate || 0 })),
+    }
+    await call('lumen_restaurants.api.settings.save_price_book', { payload })
+    session.notify(t('Price book saved'))
+    editingBook.value = false
+    priceBooks.value = await call('lumen_restaurants.api.settings.list_price_books')
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    saving.value = false
+  }
+}
+
+async function deleteBook() {
+  if (!confirm(t('Delete price book "{title}"?', { title: bookForm.value.title }))) return
+  try {
+    await call('lumen_restaurants.api.settings.delete_price_book', { name: bookForm.value.name })
+    editingBook.value = false
+    priceBooks.value = await call('lumen_restaurants.api.settings.list_price_books')
+  } catch (e) {
+    session.notify(e.message, true)
+  }
+}
+
+// ---- general ----
+async function saveGeneral() {
+  saving.value = true
+  try {
+    const info = await call('lumen_restaurants.api.settings.save_settings', {
+      payload: generalForm.value,
+    })
+    settingsInfo.value = info
+    profileReceiptOverrides.value = info.profile_receipt_overrides || []
+    generalForm.value.discount_passcode = ''
+    session.settings.delivery_apps = info.delivery_apps
+    session.settings.discount_limit_percent = info.discount_limit_percent
+    session.settings.discount_approval_mode = info.discount_approval_mode || 'Passcode only'
+    session.settings.cash_out_reason_required = info.cash_out_reason_required ? 1 : 0
+    session.settings.cash_out_approval = info.cash_out_approval || 'Off'
+    session.settings.cash_out_approval_amount = info.cash_out_approval_amount || 0
+    session.settings.restrict_returns_to_window = info.restrict_returns_to_window || 0
+    session.settings.return_window_days = info.return_window_days || 0
+    session.settings.return_reasons = info.return_reasons || []
+    session.settings.show_out_of_stock = info.show_out_of_stock || 0
+    session.settings.serial_scan_only = info.serial_scan_only || 0
+    session.settings.enable_order_discount = info.enable_order_discount ?? 1
+    session.settings.enable_service_charge = info.enable_service_charge || 0
+    session.settings.service_charge_percent = info.service_charge_percent || 0
+    session.settings.enable_price_checker = info.enable_price_checker ?? 1
+    session.settings.salesperson_mode = info.salesperson_mode || 'Optional'
+    session.settings.variance_reason_mode = info.variance_reason_mode || 'Optional'
+    session.settings.variance_reason_threshold = info.variance_reason_threshold || 0
+    session.settings.variance_reasons = info.variance_reasons || []
+    session.settings.credit_sales_enabled = info.credit_sales_enabled || 0
+    session.settings.credit_customers = info.credit_customers || 'Customers allowed on their card'
+    session.settings.credit_default_limit = info.credit_default_limit || 0
+    // The "?" comes and goes with the switch, no reload needed.
+    session.help = {
+      ...session.help,
+      in_till: info.help_in_till ? 1 : 0,
+      offer_tour: info.help_offer_tour ? 1 : 0,
+      whats_new: info.help_whats_new ? 1 : 0,
+    }
+    session.settings.enable_insights = info.enable_insights ?? 1
+    session.settings.enable_cashback = info.enable_cashback ?? 1
+    session.settings.enable_xreport = info.enable_xreport ?? 1
+    session.settings.enable_email_receipt = info.enable_email_receipt || 0
+    session.settings.enable_customer_display = info.enable_customer_display || 0
+    session.settings.enable_till_lock = info.enable_till_lock || 0
+    session.settings.auto_lock_minutes = info.auto_lock_minutes || 0
+    session.settings.enable_quick_keys = info.enable_quick_keys || 0
+    // Turning holds off has to take the button and the screen away at once,
+    // not on the next reload.
+    session.settings.enable_layaway = info.enable_layaway || 0
+    session.settings.layaway_days = info.layaway_days || 0
+    session.settings.layaway_min_percent = info.layaway_min_percent || 0
+    session.settings.deposit_with_tax = info.deposit_with_tax || 0
+    for (const k of Object.keys(info)) {
+      if (k.startsWith('receipt_')) session.settings[k] = info[k]
+    }
+    // Other currencies: a new one was just set up (walk-in customer, drawer on
+    // the outlet), so the till reloads its payment methods and rates.
+    for (const r of info.sale_currencies || []) {
+      if (r.setup_error) session.notify(t('{code} could not be set up: {reason}', { code: r.currency, reason: r.setup_error }), true)
+    }
+    generalForm.value.sale_currencies = currencyRows(info)
+    loadRateRows(info)
+    generalForm.value.customer_form_fields = (info.customer_form_fields || []).map((r) => ({ ...r }))
+    // The till picks up the new rules (currencies, the customer form) at once.
+    await session.bootstrap(session.posProfile)
+    session.notify(t('Settings saved'))
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    saving.value = false
+  }
+}
+
+async function refreshCache() {
+  session.notify(t('Refreshing catalog cache…'))
+  await catalog.cacheFullCatalog()
+  await catalog.cacheCustomers()
+  cachedItems.value = await catalogCount().catch(() => 0)
+  cachedCustomers.value = await customerCount().catch(() => 0)
+  session.notify(t('Cached {n} items for offline use', { n: cachedItems.value }))
+}
+
+// ---- presentational helpers (UI re-layout only, no behaviour change) ----
+const PROMO_TYPES = ['Simple Discount', 'Buy X Get Y', 'Spend and Save']
+const showTest = ref(false)
+const promoSearch = ref('')
+const bundleSearch = ref('')
+const bookSearch = ref('')
+
+const filteredPromotions = computed(() => {
+  const q = promoSearch.value.trim().toLowerCase()
+  if (!q) return promotions.value
+  return promotions.value.filter((p) => (p.title || '').toLowerCase().includes(q))
+})
+const filteredCashbackRules = computed(() => {
+  const q = cashbackSearch.value.trim().toLowerCase()
+  if (!q) return cashbackRules.value
+  return cashbackRules.value.filter((r) => (r.title || '').toLowerCase().includes(q))
+})
+const filteredBundles = computed(() => {
+  const q = bundleSearch.value.trim().toLowerCase()
+  if (!q) return bundles.value
+  return bundles.value.filter((b) => (b.title || '').toLowerCase().includes(q))
+})
+const filteredBooks = computed(() => {
+  const q = bookSearch.value.trim().toLowerCase()
+  if (!q) return priceBooks.value
+  return priceBooks.value.filter((b) => (b.title || '').toLowerCase().includes(q))
+})
+</script>
+
+<style scoped>
+.settings {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  max-width: 920px;
+  margin: 0 auto;
+  width: 100%;
+}
+.logo-preview {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.logo-preview img {
+  max-height: 60px;
+  max-width: 220px;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  background: #fff;
+}
+.rc-scope {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  background: rgba(20, 99, 255, 0.06);
+  border: 1px solid rgba(20, 99, 255, 0.18);
+  border-radius: var(--radius);
+}
+.rc-scope-label { font-weight: 700; font-size: 13px; }
+.rc-scope-select {
+  min-width: 200px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--input-bg, #fff);
+  color: inherit;
+  font: inherit;
+}
+.rc-scope .btn { padding: 6px 14px; }
+.rc-scope-hint { margin-inline-start: 4px; }
+.receipt-config { display: flex; gap: 22px; align-items: flex-start; flex-wrap: wrap; }
+.rc-controls { flex: 1; min-width: 280px; }
+.rc-preview { width: 320px; flex-shrink: 0; position: sticky; top: 8px; }
+.rc-preview-label { text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; margin-bottom: 6px; }
+.cf-section { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border-subtle); }
+.cf-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+.cf-table { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.ic-wrap { overflow-x: auto; }
+.cur-pick { flex: 0 0 170px; }
+.cur-block { border-bottom: 1px solid var(--border); padding-bottom: 4px; margin-bottom: 10px; }
+.cur-block .cf-row { margin-bottom: 6px; }
+.cur-remove { margin-inline-start: auto; }
+.rate-src { max-width: 170px; }
+.margin-in input { width: 72px; }
+.auto-status { display: flex; flex-direction: column; gap: 2px; margin: -2px 0 10px; }
+.pill-auto { border: 1px solid var(--border); background: var(--surface-2); border-radius: 999px; padding: 2px 8px; }
+.auto-actions { display: flex; gap: 14px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+.ic-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.neg { color: var(--red); }
+.ic-table th, .ic-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: start; }
+.ic-table .right { text-align: end; }
+.ic-links { display: flex; flex-direction: column; gap: 2px; }
+.ic-links a { color: var(--brand); text-decoration: none; font-variant-numeric: tabular-nums; }
+.ic-links a:hover { text-decoration: underline; }
+.cf-head,
+.cf-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) 32px;
+  gap: 8px;
+  align-items: center;
+}
+.cf-head { font-size: 12px; font-weight: 700; color: var(--text-muted); padding: 0 2px; }
+.cf-line select { width: 100%; min-width: 0; padding: 7px 9px; }
+.cf-line select:disabled { opacity: 0.6; }
+.cf-name { display: flex; flex-direction: column; font-weight: 600; min-width: 0; }
+.cf-name .muted { font-family: var(--mono); font-weight: 400; }
+.cf-add { display: flex; gap: 8px; margin-top: 12px; }
+.cf-add select { flex: 1; min-width: 0; }
+.rate-label { font-weight: 700; }
+.rate-in { width: 120px; }
+.cf-in {
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--input-bg, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 12.5px;
+}
+.cf-field { flex: 1; min-width: 180px; }
+.idx-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.idx-table td { padding: 5px 6px; border-bottom: 1px solid var(--border-subtle); }
+.idx-doctype { font-weight: 600; }
+.idx-cols { font-family: var(--mono); }
+/* System check (0.57.0) */
+.sc-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 12px; }
+.sc-versions { font-size: 13px; color: var(--text-muted); }
+.sc-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+.sc-chip { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+.sc-chip.problem, .sc-level.problem { background: rgba(224, 65, 63, 0.14); color: var(--red); }
+.sc-chip.warn, .sc-level.warn { background: rgba(201, 130, 27, 0.16); color: var(--amber); }
+.sc-chip.info, .sc-level.info { background: var(--surface-2); color: var(--text-muted); }
+.sc-chip.ok, .sc-level.ok { background: rgba(20, 99, 255, 0.12); color: var(--brand-dark); }
+.sc-area { margin-top: 16px; }
+.sc-area-title { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+.sc-row { display: flex; gap: 10px; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: 10px; margin-bottom: 6px; }
+.sc-row.problem { border-color: rgba(224, 65, 63, 0.5); }
+.sc-row.warn { border-color: rgba(201, 130, 27, 0.5); }
+.sc-mark { flex: none; display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; }
+.sc-mark.problem { color: var(--red); }
+.sc-mark.warn { color: var(--amber); }
+.sc-mark.info { color: var(--text-muted); }
+.sc-mark.ok { color: var(--brand); }
+.sc-text { min-width: 0; flex: 1; }
+.sc-title { font-weight: 600; font-size: 13.5px; }
+.sc-level { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 6px; margin-inline-start: 6px; white-space: nowrap; }
+.sc-detail { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
+.sc-items { margin: 6px 0 0; padding-inline-start: 18px; font-size: 12px; color: var(--text-muted); }
+.sc-items li { overflow-wrap: anywhere; }
+.sc-fix { font-size: 12.5px; margin-top: 6px; }
+.idx-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.idx-badge.built { background: rgba(34, 197, 94, 0.16); color: #1a8f4c; }
+.idx-badge.missing { background: rgba(226, 48, 48, 0.14); color: #c23434; }
+.idx-badge.n-a { background: var(--surface-2, rgba(0,0,0,0.05)); color: var(--text-muted); }
+.idx-badge.unknown { background: rgba(245, 166, 35, 0.16); color: #b9791a; }
+.rc-toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; margin-bottom: 12px; }
+.rc-textfields { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.rc-textfields input, .rc-textfields textarea { width: 100%; font-size: 13px; }
+.rc-textfields textarea { resize: vertical; }
+.audit-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.audit-filters select, .audit-filters input { padding: 7px 10px; font-size: 13px; }
+.audit-table { width: 100%; border-collapse: collapse; }
+.audit-table th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.audit-table th.right { text-align: right; }
+.audit-table td { padding: 8px; border-bottom: 1px solid var(--border-subtle); vertical-align: top; }
+.audit-table td.right { text-align: right; }
+.audit-tag {
+  display: inline-block;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--brand-dark);
+  background: rgba(20, 99, 255, 0.1);
+  border-radius: 999px;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+
+/* ---- Segmented pill tab bar ---- */
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px;
+}
+.tab {
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--text-muted);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.tab:hover { color: var(--text); }
+.tab.active { background: var(--brand); color: #fff; }
+
+.tab-body { display: flex; flex-direction: column; gap: 14px; }
+
+/* ---- General, split into groups ---- */
+.gen-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px;
+}
+.gen-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-weight: 500;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.gen-nav-btn:hover { color: var(--text); }
+.gen-nav-btn.active { background: var(--brand); color: #fff; }
+.gen-nav-btn.active .icon { color: #fff; }
+/* One line under a card title saying what the card is for. */
+.sec-note {
+  margin: -6px 0 16px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 70ch;
+}
+
+/* ---- Return restrictions ---- */
+.restriction-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.restriction-main { flex: 1; min-width: 0; }
+.restriction-title { font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.restriction-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(245, 166, 35, 0.16);
+  color: #9a6a0a;
+  white-space: nowrap;
+}
+.restriction-badge.hard { background: rgba(214, 48, 49, 0.14); color: #a02525; }
+.restriction-badge.off { background: var(--bg); color: var(--text-muted); }
+.restriction-editor {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+/* ---- List (master) view ---- */
+.list-view { display: flex; flex-direction: column; gap: 0; }
+.list-head { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
+.list-search { flex: 1; min-width: 160px; }
+.hint-row { font-size: 13px; line-height: 1.55; margin: 0 0 10px; }
+.pf-banner {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: rgba(20, 99, 255, 0.08);
+  border: 1px solid rgba(20, 99, 255, 0.22);
+  border-radius: var(--radius);
+  padding: 11px 14px;
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+.pf-banner b { color: var(--brand-dark); }
+.pf-sub { color: var(--text-muted); font-size: 12px; margin-top: 3px; }
+.empty {
+  padding: 48px;
+  text-align: center;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.card-list { display: flex; flex-direction: column; gap: 8px; }
+.entity-card {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  text-align: left;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.entity-card:hover { background: var(--surface-2); border-color: var(--brand-soft); }
+.status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--text-muted);
+  flex: none;
+  opacity: 0.5;
+}
+.status-dot.on { background: var(--brand); opacity: 1; }
+.entity-main { flex: 1; min-width: 0; }
+.entity-title { font-weight: 500; display: flex; align-items: center; gap: 6px; }
+.entity-sub { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entity-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--brand-dark);
+  white-space: nowrap;
+}
+.row-title { font-weight: 500; }
+.small { font-size: 12px; }
+.status-pill {
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 999px;
+  padding: 3px 11px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.status-pill.on { background: rgba(20, 99, 255, 0.1); color: var(--brand-dark); }
+.status-pill.expired { background: rgba(226, 48, 48, 0.12); color: var(--red); }
+html[data-theme='dark'] .status-pill.expired { background: rgba(255, 120, 120, 0.18); color: #ff9b9b; }
+
+/* ---- Editor (detail) view ---- */
+.editor { display: flex; flex-direction: column; gap: 14px; padding-bottom: 84px; }
+
+/* Grouped section cards */
+.sec-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.sec-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 14px;
+}
+.sec-title > span:first-child { display: inline-flex; align-items: center; gap: 8px; }
+/* The title sits beside its icon; a control after it (a tick box, a button)
+   goes to the far end. With space-between on the whole row, a card whose
+   title is just an icon and text had them at opposite ends. */
+.sec-title > :not(:first-child):last-child { margin-inline-start: auto; }
+.sec-title .icon { color: var(--brand); }
+button.sec-title.collapsible {
+  width: 100%;
+  text-align: left;
+  margin-bottom: 0;
+}
+button.sec-title.collapsible + * { margin-top: 14px; }
+
+.cap-rules { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.cap-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr 28px;
+  gap: 8px;
+  align-items: center;
+}
+.cap-what {
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+}
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field span { font-size: 12.25px; font-weight: 500; line-height: 1.5; color: var(--text-muted); }
+.span-2 { grid-column: span 2; }
+
+.sub-label {
+  font-size: 12.25px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin: 16px 0 8px;
+}
+
+/* Segmented control (promotion type) */
+.seg-field { margin-top: 14px; }
+.seg-label { display: block; font-size: 11.5px; font-weight: 500; color: var(--text-muted); margin-bottom: 6px; }
+.segmented {
+  display: inline-flex;
+  gap: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px;
+  flex-wrap: wrap;
+}
+.seg-btn {
+  border-radius: calc(var(--radius) - 2px);
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.seg-btn:hover { color: var(--text); }
+.seg-btn.on { background: var(--brand); color: #fff; }
+
+.toggle-row { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+
+.day-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.day-chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+.day-chip.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Products header row */
+.prod-head {
+  display: flex;
+  gap: 8px;
+  font-size: 10.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.prod-head .ph-mode { width: 96px; }
+.prod-head .ph-type { width: 110px; }
+.prod-head .ph-pick { flex: 1; }
+
+/* Coupons */
+.coupon-pool {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.coupon-stats { font-weight: 500; font-size: 12.5px; margin-bottom: 8px; }
+.coupon-pool .item-row { margin-bottom: 8px; flex-wrap: wrap; }
+.inline-num { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-muted); white-space: nowrap; }
+.bulk-adjust { align-items: center; flex-wrap: wrap; gap: 8px; margin: 4px 0 10px; }
+
+.item-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+.mode-select { width: 96px; font-weight: 500; }
+.mode-select.excluding { color: var(--red); border-color: rgba(226, 48, 48, 0.4); }
+.new-pl { font-size: 11px; color: var(--brand); padding: 0 4px; }
+.price-table { width: 100%; border-collapse: collapse; margin: 4px 0 8px; }
+.price-table th {
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 6px 8px;
+}
+.price-table th.right, .price-table td.right { text-align: right; }
+.price-table td { padding: 7px 8px; border-top: 1px solid var(--border); }
+.price-item-name { font-weight: 500; font-size: 13px; }
+.mono { font-family: ui-monospace, monospace; }
+.price-input { width: 110px; text-align: right; padding: 6px 9px; }
+.price-input.dirty { border-color: var(--amber); }
+.item-row input { flex: 1; min-width: 160px; }
+.add-row { margin-top: 2px; display: flex; gap: 8px; align-items: center; }
+.table-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 80px auto 32px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.table-row input[type='text'], .table-row input:not([type]), .table-row input[type='number'] {
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+}
+.table-off { display: flex; align-items: center; gap: 6px; }
+/* The reasons for a short or over, under their mode (0.59.0). */
+.vr-settings { margin: 0 0 14px; padding-inline-start: 2px; }
+/* Sales on account (0.60.0): how it works, and what LumenPOS set up. */
+.how-box {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.how-title { font-weight: 700; font-size: 13.5px; margin-bottom: 6px; }
+.how-list { margin: 0 0 8px; padding-inline-start: 20px; font-size: 13px; line-height: 1.6; color: var(--text); }
+.how-list li + li { margin-top: 3px; }
+.credit-setup { margin-top: 16px; }
+.credit-setup-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.credit-setup-row:last-child { border-bottom: none; }
+.credit-company { font-weight: 600; min-width: 140px; }
+.credit-clash { color: var(--red); font-weight: 600; }
+
+/* iOS-style settings list */
+.setting-list { display: flex; flex-direction: column; }
+.setting-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 15px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.setting-row:first-child { padding-top: 0; }
+.setting-row:last-child { border-bottom: none; padding-bottom: 0; }
+.setting-toggle { margin-top: 2px; width: 17px; height: 17px; flex-shrink: 0; cursor: pointer; }
+.setting-text { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.setting-title { font-weight: 600; font-size: 13.5px; color: var(--text); }
+.setting-desc { font-size: 12.75px; color: var(--text-muted); line-height: 1.55; }
+
+.rule-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.rule-select { min-width: 150px; }
+.dedicated-hint {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin: 8px 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.dedicated-hint.warn {
+  background: rgba(245, 166, 35, 0.12);
+  border-color: rgba(245, 166, 35, 0.4);
+  color: var(--text);
+}
+.app-block {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.app-block .item-row { margin-bottom: 0; }
+.app-block .ple { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border-subtle); }
+.outlet-row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+.chip-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(20, 99, 255, 0.08);
+  color: var(--brand-dark);
+  border-radius: 999px;
+  padding: 4px 11px;
+}
+
+/* Loyalty / gift card inner blocks */
+.loyalty-editor { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-subtle); }
+.info-row {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.info-row:last-child { border-bottom: none; }
+.info-row.gc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.editor-actions { display: flex; gap: 10px; margin-top: 14px; }
+.danger { color: var(--red); }
+.row-warning {
+  color: var(--amber);
+  font-weight: 500;
+  font-size: 12.5px;
+  margin: 8px 0 0;
+}
+.test-report {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin: 10px 0 4px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.gate-ok { color: var(--brand-dark); font-weight: 500; }
+.import-report {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin: 4px 0 10px;
+  font-size: 12.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.import-report .dismiss { align-self: flex-start; margin-top: 4px; color: var(--text-muted); }
+.gate-bad { color: var(--red); font-weight: 500; }
+.test-verdict {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+
+/* Sticky action footer */
+.editor-footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 16px;
+  margin: 0 -16px -16px;
+  background: var(--card-bg);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 8px rgba(20, 26, 40, 0.06);
+  z-index: 5;
+}
+
+/* Status metric cards */
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+.stat { padding: 14px 16px; }
+.stat-label {
+  font-size: 11.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.stat-value { font-size: 16px; font-weight: 500; margin-top: 3px; }
+.cb-accounting { margin-bottom: 14px; }
+.cb-company { padding: 10px 0; }
+.cb-company + .cb-company { border-top: 1px solid var(--border-subtle); }
+.cb-grid {
+  display: grid;
+  grid-template-columns: minmax(140px, max-content) 1fr;
+  gap: 6px 16px;
+  margin-top: 6px;
+  font-size: 13px;
+}
+@media (max-width: 560px) {
+  .cb-grid { grid-template-columns: 1fr; gap: 2px; }
+}
+</style>

@@ -1,0 +1,138 @@
+{
+ "actions": [],
+ "creation": "2026-11-02 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "tap_number",
+  "station",
+  "status",
+  "column_break_1",
+  "keg_item",
+  "item_name",
+  "capacity_liters",
+  "remaining_liters",
+  "maintenance_section",
+  "tapped_at",
+  "last_cleaned"
+ ],
+ "fields": [
+  {
+   "fieldname": "tap_number",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Tap Identifier",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "Main Bar",
+   "fieldname": "station",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Bar Station"
+  },
+  {
+   "default": "Active",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Active\nKicking Soon\nEmpty\nCleaning / Offline"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "keg_item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Tapped Keg / Beverage Item",
+   "options": "Item"
+  },
+  {
+   "fetch_from": "keg_item.item_name",
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Beverage Name",
+   "read_only": 1
+  },
+  {
+   "default": "50",
+   "fieldname": "capacity_liters",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Keg Capacity (Liters)"
+  },
+  {
+   "default": "50",
+   "fieldname": "remaining_liters",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Remaining (Liters)"
+  },
+  {
+   "fieldname": "maintenance_section",
+   "fieldtype": "Section Break",
+   "label": "Maintenance & Timestamps"
+  },
+  {
+   "fieldname": "tapped_at",
+   "fieldtype": "Datetime",
+   "label": "Tapped At"
+  },
+  {
+   "fieldname": "last_cleaned",
+   "fieldtype": "Date",
+   "label": "Line Last Cleaned"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-02 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Lumen Restaurants",
+ "name": "POS Bar Tap",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "LumenPOS Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "LumenPOS Cashier",
+   "write": 1
+  }
+ ],
+ "show_title_field_in_link": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "tap_number",
+ "track_changes": 1
+}

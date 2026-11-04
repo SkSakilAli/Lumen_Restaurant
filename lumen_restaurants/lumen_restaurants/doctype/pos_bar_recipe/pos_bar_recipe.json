@@ -1,0 +1,146 @@
+{
+ "actions": [],
+ "autoname": "format:BREC-{####}",
+ "creation": "2026-11-02 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "item_code",
+  "recipe_name",
+  "category",
+  "column_break_1",
+  "is_active",
+  "glassware",
+  "serving_size_ml",
+  "cost",
+  "prep_section",
+  "prep_instructions",
+  "ingredients_section",
+  "ingredients"
+ ],
+ "fields": [
+  {
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Finished Beverage Item",
+   "options": "Item",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fetch_from": "item_code.item_name",
+   "fieldname": "recipe_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Recipe Name"
+  },
+  {
+   "default": "Cocktail",
+   "fieldname": "category",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Category",
+   "options": "Cocktail\nSpirits & Shots\nDraft Beer\nWine by the Glass\nMocktail / Non-Alcoholic"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Active"
+  },
+  {
+   "default": "Rocks Glass",
+   "fieldname": "glassware",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Glassware",
+   "options": "Rocks Glass\nHighball Glass\nCoupe Glass\nMartini Glass\nPint Glass\nHalf Pint Glass\nWine Glass\nShot Glass\nCollins Glass\nMug / Jar"
+  },
+  {
+   "fieldname": "serving_size_ml",
+   "fieldtype": "Float",
+   "label": "Total Serving Size (ml)"
+  },
+  {
+   "fieldname": "cost",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Estimated Pour Cost"
+  },
+  {
+   "fieldname": "prep_section",
+   "fieldtype": "Section Break",
+   "label": "Bartender Instructions & Garnish"
+  },
+  {
+   "fieldname": "prep_instructions",
+   "fieldtype": "Small Text",
+   "label": "Preparation & Garnish Method"
+  },
+  {
+   "fieldname": "ingredients_section",
+   "fieldtype": "Section Break",
+   "label": "Ingredients & Pour Quantities"
+  },
+  {
+   "fieldname": "ingredients",
+   "fieldtype": "Table",
+   "label": "Ingredients",
+   "options": "POS Bar Recipe Ingredient",
+   "reqd": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-02 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Lumen Restaurants",
+ "name": "POS Bar Recipe",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "LumenPOS Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "LumenPOS Cashier"
+  }
+ ],
+ "show_title_field_in_link": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "recipe_name",
+ "track_changes": 1
+}

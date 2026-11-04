@@ -1,0 +1,89 @@
+{
+ "actions": [],
+ "creation": "2026-09-24 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "item_code",
+  "title",
+  "title_en",
+  "description",
+  "description_en",
+  "image",
+  "pricing",
+  "required",
+  "max_qty"
+ ],
+ "fields": [
+  {
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "label": "Item",
+   "options": "Item",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Name on the page (Arabic)",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "title_en",
+   "fieldtype": "Data",
+   "label": "Name on the page (English)"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description (Arabic)"
+  },
+  {
+   "fieldname": "description_en",
+   "fieldtype": "Small Text",
+   "label": "Description (English)"
+  },
+  {
+   "fieldname": "image",
+   "fieldtype": "Attach Image",
+   "label": "Image"
+  },
+  {
+   "fieldname": "pricing",
+   "fieldtype": "Select",
+   "label": "Pricing",
+   "options": "Per booking\nPer guest",
+   "default": "Per booking",
+   "in_list_view": 1,
+   "description": "Per guest: the quantity follows the party size, like a buffet. Per booking: the customer picks how many."
+  },
+  {
+   "fieldname": "required",
+   "fieldtype": "Check",
+   "label": "Always included",
+   "default": "0",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "max_qty",
+   "fieldtype": "Int",
+   "label": "Most per booking",
+   "default": "10"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Lumen Restaurants",
+ "name": "POS Booking Page Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0,
+ "istable": 1
+}

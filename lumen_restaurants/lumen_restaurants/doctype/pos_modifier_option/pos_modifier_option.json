@@ -1,0 +1,51 @@
+{
+ "actions": [],
+ "creation": "2026-09-28 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "option_name",
+  "is_default",
+  "item"
+ ],
+ "fields": [
+  {
+   "description": "No pickles, Medium heat, Extra mayo.",
+   "fieldname": "option_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Choice",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "description": "Picked for the cashier when the window opens.",
+   "fieldname": "is_default",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Default"
+  },
+  {
+   "description": "A choice with a price is billed as this item, at its price in the outlet's price list, on its own line under the dish. With no item, or a price of 0, it is a free instruction for the kitchen.",
+   "fieldname": "item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Billed as item",
+   "options": "Item"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-09-28 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Lumen Restaurants",
+ "name": "POS Modifier Option",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

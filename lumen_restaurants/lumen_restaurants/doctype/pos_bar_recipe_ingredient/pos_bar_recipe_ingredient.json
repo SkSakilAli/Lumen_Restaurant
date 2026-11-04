@@ -1,0 +1,75 @@
+{
+ "actions": [],
+ "creation": "2026-11-02 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "ingredient_item",
+  "ingredient_name",
+  "pour_qty",
+  "pour_uom",
+  "is_primary_spirit",
+  "cost"
+ ],
+ "fields": [
+  {
+   "fieldname": "ingredient_item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Raw Spirit / Ingredient Item",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "ingredient_item.item_name",
+   "fieldname": "ingredient_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Ingredient Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pour_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Pour Qty",
+   "reqd": 1
+  },
+  {
+   "default": "ml",
+   "fieldname": "pour_uom",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Pour UOM",
+   "options": "UOM",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_primary_spirit",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Is Primary Spirit (For Substitutions)"
+  },
+  {
+   "fieldname": "cost",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Unit Cost"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-11-02 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Lumen Restaurants",
+ "name": "POS Bar Recipe Ingredient",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

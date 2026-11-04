@@ -1,0 +1,253 @@
+<!-- Copyright (c) 2026 Lumen Solutions
+     SPDX-License-Identifier: AGPL-3.0-only
+     "LumenPOS" is a trademark of Lumen Solutions. See TRADEMARKS.md. -->
+<template>
+  <nav class="rail" data-tour="nav-rail">
+    <router-link to="/" class="rail-item" exact-active-class="active">
+      <svg viewBox="0 0 24 24"><path d="M7 18a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM3 2h2.5l3.1 11.6A2 2 0 0 0 10.5 15h8.2a2 2 0 0 0 1.9-1.4L23 6H6.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span :class="fit(t('Sell'))">{{ t('Sell') }}</span>
+    </router-link>
+    <router-link v-if="session.restaurantMode" to="/tables" class="rail-item" active-class="active">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="10.5" r="5.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 15.7V21M8 21h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <span>{{ t('Tables') }}</span>
+    </router-link>
+    <router-link v-if="session.restaurantMode" to="/reservations" class="rail-item" active-class="active">
+      <!-- The badge sits on the icon, as Approvals' does: outside an icon-wrap it
+           took the page's top right corner, half off the screen. -->
+      <span class="icon-wrap">
+        <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 10h17M8 3v4M16 3v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <span v-if="requestedCount" class="badge">{{ requestedCount }}</span>
+      </span>
+      <span>{{ t('Bookings') }}</span>
+    </router-link>
+    <router-link v-if="session.restaurantMode" to="/kitchen" class="rail-item" active-class="active">
+      <svg viewBox="0 0 24 24"><path d="M5 11a7 7 0 0 1 14 0v1H5zM4 15h16M7 19h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>{{ t('Kitchen') }}</span>
+    </router-link>
+    <router-link v-if="session.restaurantMode" to="/bar" class="rail-item" active-class="active">
+      <svg viewBox="0 0 24 24"><path d="M8 21h8M12 15v6M5 3l7 8 7-8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>{{ t('Bar') }}</span>
+    </router-link>
+    <!-- Lumen Restaurants: the Menu page, for whoever may edit the menu. -->
+    <router-link v-if="session.restaurantMode && session.permissions.can_edit_menu" to="/menu" class="rail-item" active-class="active">
+      <svg viewBox="0 0 24 24"><path d="M5 3.5h11.5A2.5 2.5 0 0 1 19 6v14.5H7.5A2.5 2.5 0 0 1 5 18V3.5zM9 8.5h6M9 12h6M9 15.5h3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span :class="fit(t('Menu'))">{{ t('Menu') }}</span>
+    </router-link>
+    <router-link v-if="session.permissions.view_history !== false" to="/history" class="rail-item" active-class="active">
+      <svg viewBox="0 0 24 24"><path d="M12 8v5l3.5 2M21 12a9 9 0 1 1-9-9 9 9 0 0 1 9 9z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span :class="fit(t('History'))">{{ t('History') }}</span>
+    </router-link>
+    <router-link v-if="session.permissions.customers" to="/customers" class="rail-item" active-class="active">
+      <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span :class="fit(t('Customers'))">{{ t('Customers') }}</span>
+    </router-link>
+    <router-link v-if="holdsVisible" to="/holds" class="rail-item" active-class="active">
+      <svg viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      <span :class="fit(t('Holds'))">{{ t('Holds') }}</span>
+    </router-link>
+    <router-link to="/register" class="rail-item" active-class="active">
+      <svg viewBox="0 0 24 24"><path d="M3 9h18v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9zm3-5h12l2 5H4l2-5zm5 9h2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span :class="fit(t('Register'))">{{ t('Register') }}</span>
+    </router-link>
+    <router-link v-if="session.permissions.insights || salespeopleVisible" to="/insights" class="rail-item" active-class="active">
+      <svg viewBox="0 0 24 24"><path d="M3 3v18h18M8 17v-6m5 6V7m5 10v-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span :class="fit(t('Insights'))">{{ t('Insights') }}</span>
+    </router-link>
+    <button
+      v-if="session.canApprove"
+      type="button"
+      class="rail-item"
+      :class="{ active: approvalsOpen }"
+      @click="approvalsOpen = true"
+    >
+      <span class="icon-wrap">
+        <svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4M21 12a9 9 0 1 1-9-9 9 9 0 0 1 9 9z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span v-if="pendingCount" class="badge">{{ pendingCount }}</span>
+      </span>
+      <span :class="fit(t('Approvals'))">{{ t('Approvals') }}</span>
+    </button>
+    <router-link v-if="session.canManageAny" to="/settings" class="rail-item" active-class="active">
+      <svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span :class="fit(t('Settings'))">{{ t('Settings') }}</span>
+    </router-link>
+    <button class="rail-item rail-bottom" type="button" @click="toggleTheme" :title="theme === 'dark' ? t('Switch to light mode') : t('Switch to dark mode')">
+      <svg v-if="theme === 'dark'" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <svg v-else viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      <span :class="fit(theme === 'dark' ? t('Light') : t('Dark'))">{{ theme === 'dark' ? t('Light') : t('Dark') }}</span>
+    </button>
+    <a class="rail-item" href="/app" :title="t('Back to ERPNext')">
+      <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span :class="fit(t('ERP'))">{{ t('ERP') }}</span>
+    </a>
+  </nav>
+  <ApprovalsModal v-if="approvalsOpen" @close="onApprovalsClose" @changed="refreshPending" />
+</template>
+
+<script setup>
+import { theme, toggleTheme } from '../theme'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { useSessionStore } from '../stores/session'
+import { call } from '../api'
+import { t } from '../i18n'
+
+// A label longer than the rail is wide (Configuración, Einstellungen) takes a
+// smaller size rather than breaking in the middle of the word.
+const fit = (label) => (String(label || '').length > 11 ? 'tight' : '')
+import ApprovalsModal from './ApprovalsModal.vue'
+
+const session = useSessionStore()
+// Holds show when the shop uses them, and keep showing while any are still
+// open: switching the feature off must not strand a customer's deposit.
+const holdsVisible = computed(
+  () =>
+    (session.settings.enable_layaway || session.settings.open_holds) &&
+    session.permissions.can_hold_goods !== false
+)
+// Insights also opens for the salesperson report alone (its Salespeople tab): for
+// whoever may see it, while the shop uses salespeople.
+const salespeopleVisible = computed(
+  () => session.permissions.sales_by_person && (session.settings.salesperson_mode || 'Optional') !== 'Off'
+)
+const approvalsOpen = ref(false)
+const pendingCount = ref(0)
+let timer = null
+let bookingTimer = null
+
+const requestedCount = ref(0)
+async function refreshRequested() {
+  if (!session.restaurantMode || session.offline) {
+    requestedCount.value = 0
+    return
+  }
+  try {
+    requestedCount.value = await call('lumen_restaurants.api.reservations.requested_count', {
+      pos_profile: session.posProfile,
+    })
+  } catch {
+    requestedCount.value = 0
+  }
+}
+
+async function refreshPending() {
+  if (!session.canApprove || session.offline) {
+    pendingCount.value = 0
+    return
+  }
+  try {
+    // No profile scoping, an approver sees every open-shift request they can
+    // act on, even when their till is on a different POS profile than the cashier.
+    const rows = await call('lumen_restaurants.api.approval_requests.pending_requests', {})
+    pendingCount.value = rows.length
+  } catch {
+    /* ignore, the badge is best-effort */
+  }
+}
+
+function onApprovalsClose() {
+  approvalsOpen.value = false
+  refreshPending()
+}
+
+onMounted(() => {
+  refreshRequested()
+  bookingTimer = setInterval(refreshRequested, 30000)
+  if (!session.canApprove) return
+  refreshPending()
+  timer = setInterval(refreshPending, 10000)
+  window.addEventListener('focus', refreshPending)
+})
+onUnmounted(() => {
+  clearInterval(timer)
+  clearInterval(bookingTimer)
+  window.removeEventListener('focus', refreshPending)
+})
+</script>
+
+<style scoped>
+.rail {
+  width: 76px;
+  background: var(--nav-bg);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 10px 0;
+  flex-shrink: 0;
+  height: 100vh;
+  max-height: 100vh;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+.rail::-webkit-scrollbar {
+  width: 4px;
+}
+.rail::-webkit-scrollbar-track {
+  background: transparent;
+}
+.rail::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+.rail::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+.rail-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 2px;
+  color: #98a1b3;
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 600;
+  border-left: 3px solid transparent;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+.rail-item svg {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+/* A long label (see fit() in the script) is set smaller, and only a word
+   that still cannot fit breaks, so nothing runs out under the page. */
+.rail-item > span:last-child {
+  max-width: 70px;
+  text-align: center;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.rail-item > span.tight { font-size: 9.5px; letter-spacing: -0.1px; }
+.rail-item:hover { color: #fff; }
+.rail-item.active {
+  color: #fff;
+  background: var(--nav-active);
+  border-left-color: var(--brand);
+}
+.rail-bottom {
+  margin-top: 16px;
+  flex-shrink: 0;
+}
+.icon-wrap { position: relative; display: inline-flex; }
+.badge {
+  position: absolute;
+  top: -6px;
+  right: -9px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+</style>

@@ -1,0 +1,78 @@
+{
+ "actions": [],
+ "creation": "2026-09-24 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "key",
+  "label",
+  "label_en",
+  "fieldtype",
+  "options",
+  "required",
+  "placeholder"
+ ],
+ "fields": [
+  {
+   "fieldname": "key",
+   "fieldtype": "Data",
+   "label": "Key",
+   "description": "Stable id the page answers with. Set once, never shown.",
+   "read_only": 1
+  },
+  {
+   "fieldname": "label",
+   "fieldtype": "Data",
+   "label": "Label (Arabic)",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "label_en",
+   "fieldtype": "Data",
+   "label": "Label (English)",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "fieldtype",
+   "fieldtype": "Select",
+   "label": "Type",
+   "options": "Text\nNumber\nSelect\nCheck\nDate\nLong Text",
+   "default": "Text",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "options",
+   "fieldtype": "Small Text",
+   "label": "Choices",
+   "description": "For Select: one per line, \"Arabic | English\".",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "required",
+   "fieldtype": "Check",
+   "label": "Required",
+   "default": "0",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "placeholder",
+   "fieldtype": "Data",
+   "label": "Hint"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Lumen Restaurants",
+ "name": "POS Booking Page Field",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0,
+ "istable": 1
+}

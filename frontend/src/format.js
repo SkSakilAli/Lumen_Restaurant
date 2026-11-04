@@ -1,0 +1,188 @@
+// Copyright (c) 2026 Lumen Solutions
+// SPDX-License-Identifier: AGPL-3.0-only
+// "LumenPOS" is a trademark of Lumen Solutions. See TRADEMARKS.md.
+let currency = 'USD'
+
+export function setCurrency(code) {
+  if (code) currency = code
+}
+
+// Unicode isolate: on an RTL page a bare amount is re-ordered by the bidi
+// algorithm, a refund's minus sign migrates to the wrong end of the number
+// ("‎-25.00 SAR" rendering as "25.00 SAR-"). Wrapping each amount in FSI…PDI
+// isolates it from the surrounding text so it always reads correctly.
+const FSI = '⁨'
+const PDI = '⁩'
+
+export function isolate(text) {
+  const s = String(text ?? '')
+  return s ? `${FSI}${s}${PDI}` : s
+}
+
+// `code` names the currency when it is not the outlet's: a sale to a customer
+// billed in another currency, or a drawer that holds one (lumen_restaurants.currency).
+export function money(amount, code) {
+  const unit = code || currency
+  let formatted
+  try {
+    formatted = new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: unit,
+    }).format(amount || 0)
+  } catch {
+    formatted = `${unit} ${(amount || 0).toFixed(2)}`
+  }
+  return isolate(formatted)
+}
+
+export function outletCurrency() {
+  return currency
+}
+
+// A message from the server as text. ERPNext's carry HTML (the name of a closed
+// accounting period in <strong>), and an error kept from before 0.58.1 still
+// does. A DOMParser document is inert: no script runs and no image loads, unlike
+// innerHTML on a detached element, where <img onerror> still fires.
+export function plainText(value) {
+  if (value == null) return ''
+  const text = String(value).replace(/<br\s*\/?>/gi, '\n')
+  try {
+    return (new DOMParser().parseFromString(text, 'text/html').body.textContent || '').trim()
+  } catch {
+    return text.replace(/<\/?[a-zA-Z][^<>]*>/g, '').trim()
+  }
+}
+
+// An exchange rate for people: up to six decimals, no trailing zeros
+// ("3.6725", "4").
+export function rateText(rate) {
+  return Number(rate || 0).toFixed(6).replace(/\.?0+$/, '')
+}
+
+// "1 USD = 3.75 SAR" as one isolated run: on an Arabic screen the bidi
+// algorithm otherwise moves the leading 1 to the far end.
+export function rateLine(from, rate, to) {
+  return isolate(`1 ${from} = ${rateText(rate)} ${to}`)
+}
+
+// Human-friendly warranty length from a number of days.
+export function warrantyLabel(days) {
+  days = Number(days) || 0
+  if (days <= 0) return ''
+  if (days % 365 === 0) {
+    const y = days / 365
+    return `${y} year${y > 1 ? 's' : ''} warranty`
+  }
+  if (days % 30 === 0) {
+    const m = days / 30
+    return `${m} month${m > 1 ? 's' : ''} warranty`
+  }
+  return `${days}-day warranty`
+}
+
+// A Frappe datetime ("2026-10-03 17:03:07.827194", or an unpadded
+// "17:3:7.5") read as if it were UTC: the site's own wall clock as a number,
+// so two of them subtract to the time between them, whatever the device's
+// zone (0.61.1, the shift clock).
+export function siteMs(value) {
+  if (!value) return NaN
+  let s = String(value).trim().replace(' ', 'T').replace(/\.\d+$/, '')
+  s = s.replace(/T(\d):/, 'T0$1:').replace(/:(\d)(?=:|$)/g, ':0$1')
+  return Date.parse(s + 'Z')
+}
+
+// The site's wall clock less this device's, measured from the site's own
+// "now" (`serverNow`) read at device time `at`; null when there is none.
+export function skewFrom(serverNow, at) {
+  const site = siteMs(serverNow)
+  return Number.isNaN(site) || !Number.isFinite(at) ? null : Math.round(site - at)
+}
+
+// The site's own now on the scale of siteMs: the device's time moved by the
+// measured skew, or, none measured yet, the device's own wall clock (what the
+// shift clock read before 0.61.1).
+export function siteNowFrom(deviceNow, skewMs) {
+  if (skewMs != null && Number.isFinite(skewMs)) return deviceNow + skewMs
+  return deviceNow - new Date(deviceNow).getTimezoneOffset() * 60000
+}
+
+// How long a shift has been open, as a clock: 07:01:20, the hours counting on
+// past 24. `siteNow` is the site's own now on the scale of siteMs.
+export function shiftClock(openedAt, siteNow) {
+  const start = siteMs(openedAt)
+  if (Number.isNaN(start) || !Number.isFinite(siteNow)) return ''
+  let s = Math.max(0, Math.floor((siteNow - start) / 1000))
+  const h = Math.floor(s / 3600)
+  s -= h * 3600
+  const m = Math.floor(s / 60)
+  s -= m * 60
+  const two = (n) => String(n).padStart(2, '0')
+  return `${two(h)}:${two(m)}:${two(s)}`
+}
+
+export function shortTime(value) {
+  if (!value) return ''
+  // Normalise Frappe timestamps that break Date parsing: space→T, drop the
+  // microseconds (".252308"), and pad a single-digit hour ("T1:"→"T01:") or
+  // second: Frappe 14 and later send a time of 12:47:09.5 as "12:47:9.5".
+  let s = String(value).trim().replace(' ', 'T').replace(/\.\d+$/, '')
+  s = s.replace(/T(\d):/, 'T0$1:').replace(/(:\d\d):(\d)$/, '$1:0$2')
+  // A time with no date (a posting_time on its own) is shown as a time.
+  const bare = s.match(/^(\d{1,2}):(\d\d)(?::(\d\d))?$/)
+  if (bare) {
+    return new Date(2000, 0, 1, +bare[1], +bare[2], +(bare[3] || 0)).toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  }
+  const d = new Date(s)
+  if (isNaN(d)) return String(value).replace(/\.\d+.*$/, '') // last resort: at least no fractions
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+// A browser reports an EMPTY value from <input type="number"> for anything it
+// can't parse in the user's locale, "1,500", a stray space, Arabic-Indic
+// digits, while the text the cashier typed stays visible on screen. That is
+// how a register was opened with cash in the drawer and recorded 0.00.
+// So money is read from the RAW text with this parser, never from .valueAsNumber.
+// Returns null when the value is blank or unreadable, callers must stop rather
+// than silently substitute zero.
+const ARABIC_DIGITS = /[\u0660-\u0669\u06F0-\u06F9]/g
+
+export function parseMoney(value) {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  let s = String(value).trim()
+  if (!s) return null
+  // Arabic-Indic and Extended Arabic-Indic digits -> ASCII
+  s = s.replace(ARABIC_DIGITS, (d) => {
+    const c = d.charCodeAt(0)
+    return String(c >= 0x06f0 ? c - 0x06f0 : c - 0x0660)
+  })
+  // Arabic decimal separator, spaces (incl. NBSP / thin space) and grouping
+  s = s.replace(/\u066B/g, '.').replace(/\u066C/g, '').replace(/[\s\u00a0\u202f']/g, '')
+  // If both separators appear, the LAST one is the decimal point.
+  const lastComma = s.lastIndexOf(',')
+  const lastDot = s.lastIndexOf('.')
+  if (lastComma !== -1 && lastDot !== -1) {
+    const decimal = lastComma > lastDot ? ',' : '.'
+    const grouping = decimal === ',' ? '.' : ','
+    s = s.split(grouping).join('')
+    if (decimal === ',') s = s.replace(',', '.')
+  } else if (lastComma !== -1) {
+    // Only commas: a single one with 1-2 trailing digits is a decimal comma,
+    // otherwise it's grouping ("1,500").
+    const after = s.length - lastComma - 1
+    s = s.split(',').length === 2 && after > 0 && after <= 2
+      ? s.replace(',', '.')
+      : s.split(',').join('')
+  }
+  if (!/^-?\d*\.?\d*$/.test(s) || s === '' || s === '.' || s === '-') return null
+  const n = Number(s)
+  return Number.isFinite(n) ? n : null
+}

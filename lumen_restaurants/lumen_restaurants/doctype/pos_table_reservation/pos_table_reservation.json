@@ -1,0 +1,216 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-09-24 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "pos_profile",
+  "customer_name",
+  "phone",
+  "column_break_head",
+  "status",
+  "source",
+  "section_when",
+  "reservation_date",
+  "reservation_time",
+  "guests",
+  "column_break_when",
+  "table",
+  "note",
+  "section_extras",
+  "answers",
+  "items",
+  "estimated_total",
+  "section_trail",
+  "seated_order",
+  "created_ip"
+ ],
+ "fields": [
+  {
+   "default": "RSV-.YYYY.-",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "RSV-.YYYY.-",
+   "reqd": 1
+  },
+  {
+   "fieldname": "pos_profile",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "POS Profile",
+   "options": "POS Profile",
+   "reqd": 1
+  },
+  {
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "phone",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Phone",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_head",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Confirmed",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Requested\nConfirmed\nSeated\nNo show\nCancelled"
+  },
+  {
+   "default": "Till",
+   "description": "Till: taken over the phone or in person. Online: the customer booked it on the public page.",
+   "fieldname": "source",
+   "fieldtype": "Select",
+   "label": "Source",
+   "options": "Till\nOnline",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_when",
+   "fieldtype": "Section Break",
+   "label": "When"
+  },
+  {
+   "fieldname": "reservation_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "reservation_time",
+   "fieldtype": "Time",
+   "in_list_view": 1,
+   "label": "Time",
+   "reqd": 1
+  },
+  {
+   "default": "2",
+   "fieldname": "guests",
+   "fieldtype": "Int",
+   "label": "Guests"
+  },
+  {
+   "fieldname": "column_break_when",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Optional. The floor screen flags the table before the time comes.",
+   "fieldname": "table",
+   "fieldtype": "Link",
+   "label": "Table",
+   "options": "POS Restaurant Table"
+  },
+  {
+   "fieldname": "note",
+   "fieldtype": "Small Text",
+   "label": "Note"
+  },
+  {
+   "fieldname": "section_extras",
+   "fieldtype": "Section Break",
+   "label": "From the booking page"
+  },
+  {
+   "fieldname": "answers",
+   "fieldtype": "Long Text",
+   "label": "Answers",
+   "read_only": 1,
+   "description": "What the customer filled in on the page, as it was labelled that day."
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Packages",
+   "options": "POS Table Reservation Item",
+   "read_only": 1
+  },
+  {
+   "fieldname": "estimated_total",
+   "fieldtype": "Currency",
+   "label": "Estimated total",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_trail",
+   "fieldtype": "Section Break"
+  },
+  {
+   "description": "The table order that was opened when they arrived.",
+   "fieldname": "seated_order",
+   "fieldtype": "Link",
+   "label": "Seated Order",
+   "options": "POS Restaurant Order",
+   "read_only": 1
+  },
+  {
+   "fieldname": "created_ip",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Created From IP",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Lumen Restaurants",
+ "name": "POS Table Reservation",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "LumenPOS Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "LumenPOS Cashier",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

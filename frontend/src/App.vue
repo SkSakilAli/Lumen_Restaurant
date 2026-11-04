@@ -1,0 +1,580 @@
+<!-- Copyright (c) 2026 Lumen Solutions
+     SPDX-License-Identifier: AGPL-3.0-only
+     "LumenPOS" is a trademark of Lumen Solutions. See TRADEMARKS.md. -->
+<template>
+  <!-- Customer-facing display: a chrome-free second screen, no app shell and
+       no bootstrap, it only listens for cart snapshots over BroadcastChannel. -->
+  <router-view v-if="isDisplay" />
+
+  <div class="shell" v-else-if="session.loaded && !session.error">
+    <NavRail />
+    <div class="main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <div class="topbar-title">{{ pageTitle }}</div>
+          <span class="tb-pill tb-clock"><Icon name="clock" /> {{ clockText }}</span>
+          <span v-if="session.registerOpen && shiftText" class="tb-pill tb-shift">
+            <Icon name="check" /> {{ t('Shift Open:') }} <b>{{ shiftText }}</b>
+          </span>
+        </div>
+        <div class="topbar-right">
+          <!-- Help for this screen (0.58.0, Settings, General, Help for staff). -->
+          <button
+            v-if="help.inTill"
+            class="lang-pill help-pill"
+            data-tour="help-button"
+            :title="t('Help for this screen')"
+            :aria-label="t('Help for this screen')"
+            @click="help.togglePanel()"
+          >
+            <Icon name="help" /><span class="help-word">{{ t('Help') }}</span>
+          </button>
+          <button
+            v-if="session.settings.enable_xreport && session.registerOpen"
+            class="lang-pill"
+            data-tour="xreport"
+            :title="t('X-report (mid-shift read)')"
+            :disabled="xreportLoading"
+            @click="openXReport"
+          >
+            <Icon name="report" /> {{ t('X-report') }}
+          </button>
+          <button
+            v-if="session.settings.enable_till_lock"
+            class="lang-pill"
+            :title="t('Lock the till')"
+            @click="session.lockTill()"
+          >
+            <Icon name="shield" /> {{ t('Lock') }}
+          </button>
+          <!-- Two languages: one tap swaps them. More: a short list. -->
+          <button
+            v-if="offeredLanguages.length === 2"
+            class="lang-pill"
+            data-tour="language"
+            :title="t('Language')"
+            :lang="otherLanguage.code"
+            @click="setLocale(otherLanguage.code)"
+          >
+            {{ otherLanguage.name }}
+          </button>
+          <div v-else-if="offeredLanguages.length > 2" ref="langMenu" class="lang-menu" data-tour="language">
+            <button
+              class="lang-pill"
+              :title="t('Language')"
+              aria-haspopup="listbox"
+              :aria-expanded="langOpen ? 'true' : 'false'"
+              @click="langOpen = !langOpen"
+            >
+              <Icon name="globe" /> {{ currentLanguage.name }} ▾
+            </button>
+            <div v-if="langOpen" class="lang-list" role="listbox" :aria-label="t('Language')">
+              <button
+                v-for="l in offeredLanguages"
+                :key="l.code"
+                class="lang-option"
+                :class="{ active: l.code === locale }"
+                role="option"
+                :aria-selected="l.code === locale ? 'true' : 'false'"
+                @click="pickLanguage(l.code)"
+              >
+                <bdi :lang="l.code">{{ l.name }}</bdi>
+              </button>
+            </div>
+          </div>
+          <button
+            v-if="session.offline"
+            class="offline-pill"
+            :title="t('View queued offline sales')"
+            @click="offlineLogOpen = true"
+          >
+            ⚠ {{ t('Offline') }}{{ session.queuedCount ? `, ${session.queuedCount}` : '' }}
+          </button>
+          <button
+            v-else-if="session.queuedCount"
+            class="offline-pill syncing"
+            :title="t('View offline sales log')"
+            @click="offlineLogOpen = true"
+          >
+            {{ t('Syncing') }} {{ session.queuedCount }}…
+          </button>
+          <button
+            class="register-pill"
+            data-tour="register-pill"
+            :class="{ open: session.registerOpen }"
+            :title="session.registerOpen ? t('Go to the Register page to close it') : t('Open the register')"
+            @click="$router.push('/register')"
+          >
+            {{ session.registerOpen ? t('Register open ▸ close') : t('Register closed') }}
+          </button>
+          <!-- The outlet, switchable here too (a manager covering outlets of
+               two companies no longer has to close a shift to change over). -->
+          <span class="topbar-user">
+            <span class="user-name">{{ session.userFullname }} ·</span>
+            <select
+              v-if="session.availableProfiles.length > 1"
+              class="outlet-switch"
+              :value="session.posProfile"
+              :title="t('Switch outlet')"
+              @change="switchOutlet($event)"
+            >
+              <option v-for="p in session.availableProfiles" :key="p" :value="p">{{ session.outletLabel(p) }}</option>
+            </select>
+            <template v-else>{{ session.outletLabel(session.posProfile) }}</template>
+          </span>
+        </div>
+      </header>
+      <StorageWarning />
+      <main class="content">
+        <router-view :key="session.posProfile" />
+        <!-- The open-register prompt only blocks the Sell screen; the nav
+             rail and other tabs (Register, History, Settings) stay usable. -->
+        <!-- A tour shows the Sell screen under it, so the prompt steps aside. -->
+        <OpenRegisterOverlay v-if="!session.registerOpen && route.path === '/' && !help.tourId" />
+      </main>
+    </div>
+    <div v-if="session.toast" class="toast" :class="{ error: session.toast.isError }">
+      <!-- The store raises its own messages in English ("Back online"); a
+           known one shows in the till's language, anything else as it came. -->
+      {{ t(session.toast.message) }}
+    </div>
+    <LockOverlay v-if="session.locked" />
+    <XReportModal v-if="xreportOpen && xreportSummary" :summary="xreportSummary" @close="xreportOpen = false" />
+    <OfflineLogModal v-if="offlineLogOpen" @close="offlineLogOpen = false" />
+    <HelpPanel />
+    <HelpCard v-if="!session.locked" />
+    <TourOverlay />
+  </div>
+
+  <div v-else-if="!isDisplay && session.error" class="boot-error">
+    <div class="card boot-card">
+      <h2>{{ t('Lumen Restaurants could not start') }}</h2>
+      <p>{{ session.error }}</p>
+      <button class="btn btn-primary" @click="session.bootstrap()">{{ t('Retry') }}</button>
+    </div>
+  </div>
+
+  <div v-else class="boot-loading">{{ t('Loading Lumen Restaurants…') }}</div>
+</template>
+
+<script setup>
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { call } from './api'
+import { useSessionStore } from './stores/session'
+import { useCatalogStore } from './stores/catalog'
+import { useCartStore } from './stores/cart'
+import { money, shiftClock, isolate } from './format'
+import { publishCart, onDisplayRequest } from './customerDisplay'
+import { ensurePersistentStorage } from './offline'
+import { t, locale, setLocale, offeredLanguages, LANGUAGES } from './i18n'
+import Icon from './components/Icon.vue'
+import NavRail from './components/NavRail.vue'
+import OpenRegisterOverlay from './components/OpenRegisterOverlay.vue'
+import LockOverlay from './components/LockOverlay.vue'
+import XReportModal from './components/XReportModal.vue'
+import OfflineLogModal from './components/OfflineLogModal.vue'
+import StorageWarning from './components/StorageWarning.vue'
+import HelpPanel from './components/HelpPanel.vue'
+import HelpCard from './components/HelpCard.vue'
+import TourOverlay from './components/TourOverlay.vue'
+import { useHelpStore } from './stores/help'
+
+const session = useSessionStore()
+const help = useHelpStore()
+const catalog = useCatalogStore()
+const cart = useCartStore()
+
+// Switch the outlet this screen works on. The other outlet's shift stays as it
+// is; a sale half rung up here is cleared first, with the cashier's say-so.
+async function switchOutlet(event) {
+  const name = event.target.value
+  if (!name || name === session.posProfile) return
+  if (cart.order) {
+    // Lumen Restaurants: a table order lives on its table. Put it down, which
+    // saves the last change, instead of clearing it: it is there when the till
+    // comes back to this outlet.
+    try {
+      await cart.leaveOrder()
+    } catch (e) {
+      session.notify(e.message, true)
+      event.target.value = session.posProfile
+      return
+    }
+  } else if (cart.lines.length && !confirm(t('The sale on screen will be cleared. Switch outlet?'))) {
+    event.target.value = session.posProfile
+    return
+  }
+  cart.clear()
+  await session.switchProfile(name)
+  catalog.fetch()
+  catalog.cacheFullCatalog()
+  catalog.cacheCustomers()
+}
+const route = useRoute()
+const router = useRouter()
+const isDisplay = computed(() => route.path === '/display')
+
+// Lumen Restaurants: the restaurant screens belong to restaurant outlets. At a
+// shop outlet (after a switch, or from an old link) they go back to the till.
+const RESTAURANT_ONLY = ['/tables', '/kitchen', '/reservations', '/booking-designer', '/menu']
+watch(
+  () => [session.loaded, session.restaurantMode, route.path],
+  ([loaded, restaurant, path]) => {
+    if (loaded && !restaurant && RESTAURANT_ONLY.includes(path)) router.replace('/')
+  },
+  { immediate: true },
+)
+// The language control in the top bar.
+const langOpen = ref(false)
+const langMenu = ref(null)
+const currentLanguage = computed(() => LANGUAGES.find((l) => l.code === locale.value) || LANGUAGES[0])
+const otherLanguage = computed(
+  () => offeredLanguages.value.find((l) => l.code !== locale.value) || LANGUAGES[0]
+)
+async function pickLanguage(code) {
+  langOpen.value = false
+  await setLocale(code)
+}
+function closeLangMenu(event) {
+  if (!langOpen.value) return
+  if (event.type === 'keydown' && event.key !== 'Escape') return
+  if (event.type === 'pointerdown' && langMenu.value && langMenu.value.contains(event.target)) return
+  langOpen.value = false
+}
+window.addEventListener('pointerdown', closeLangMenu)
+window.addEventListener('keydown', closeLangMenu)
+onBeforeUnmount(() => {
+  window.removeEventListener('pointerdown', closeLangMenu)
+  window.removeEventListener('keydown', closeLangMenu)
+})
+
+// Live clock + "shift open" elapsed timer for the top bar (ticks every second).
+const now = ref(Date.now())
+let clockTimer = null
+const pad = (n) => String(n).padStart(2, '0')
+const clockText = computed(() => {
+  const d = new Date(now.value)
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+})
+// How long the shift has been open, as a clock (07:01:20), counted on the
+// site's clock: the shift's opening time is the site's, so a device in another
+// zone (or set wrong) read hours too many or too few before 0.61.1.
+const shiftText = computed(() => {
+  const openedAt = session.registerSession?.opened_at
+  if (!openedAt) return ''
+  return isolate(shiftClock(openedAt, session.siteNow(now.value)))
+})
+onBeforeUnmount(() => clearInterval(clockTimer))
+
+// X-report, reachable from the top bar all shift. Fetches a fresh read-only
+// session summary on demand (no register-page visit needed).
+const xreportOpen = ref(false)
+const xreportSummary = ref(null)
+const xreportLoading = ref(false)
+
+// Offline sales log, reachable from the offline / syncing pill and Settings.
+const offlineLogOpen = ref(false)
+async function openXReport() {
+  if (!session.registerSession || xreportLoading.value) return
+  xreportLoading.value = true
+  try {
+    xreportSummary.value = await call('lumen_restaurants.api.register.get_session_summary', {
+      session: session.registerSession.name,
+    })
+    xreportOpen.value = true
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    xreportLoading.value = false
+  }
+}
+
+// Push a fully-formatted cart snapshot to any open customer display.
+function publishDisplaySnapshot() {
+  if (!session.settings?.enable_customer_display) return
+  const saved =
+    cart.promoSavings + cart.bundleSavings + cart.manualDiscountTotal + cart.orderDiscountTotal
+  // A sale in another currency is shown in it, with its local value under it.
+  const sale = cart.saleCurrency
+  const mc = session.multiCurrency || {}
+  const equivalent =
+    sale.foreign && !sale.blocked && mc.outlet_rate && sale.currency !== mc.company_currency
+      ? money(Math.round(cart.total * mc.outlet_rate * 100) / 100, mc.company_currency)
+      : ''
+  publishCart({
+    company: session.company,
+    logo: session.settings?.receipt_logo || '',
+    customer: cart.customer?.customer_name || '',
+    items: cart.lines.map((l) => ({
+      name: l.item_name,
+      qty: l.qty,
+      rate: cart.show(l.price),
+      amount: cart.show(l.price * l.qty),
+    })),
+    count: cart.itemCount,
+    subtotal: cart.show(cart.subtotal),
+    total: cart.show(cart.total),
+    equivalent,
+    savings: saved > 0.005 ? cart.show(saved) : '',
+  })
+}
+
+const pageTitle = computed(
+  () =>
+    ({
+      '/': t('Sell'),
+      '/tables': t('Tables'),
+      '/reservations': t('Bookings'),
+      '/kitchen': t('Kitchen'),
+      '/bar': t('Bar'),
+      '/menu': t('Menu'),
+      '/history': t('Sales History'),
+      '/customers': t('Customers'),
+      '/holds': t('Holds'),
+      '/register': t('Register'),
+      '/insights': t('Insights'),
+      '/settings': t('Settings'),
+    })[route.path] || t('Sell')
+)
+
+onMounted(async () => {
+  // The display window is a passive mirror, no bootstrap, no catalog, no shell.
+  if (isDisplay.value) return
+
+  clockTimer = setInterval(() => (now.value = Date.now()), 1000)
+  // Make offline storage persistent so a queued sale can't be evicted under
+  // disk pressure / LRU (fire-and-forget; grant is heuristic).
+  ensurePersistentStorage()
+  session.watchConnection()
+  await session.bootstrap()
+  if (session.loaded && !session.error) {
+    catalog.fetch()
+    catalog.cacheFullCatalog() // background fill of the offline cache
+    catalog.cacheCustomers() // recent-customers subset for offline select
+    if (session.queuedCount && !session.offline) session.flushQueue()
+    // Mirror the cart to any open customer display, and answer a display that
+    // opens later and asks for the current state.
+    cart.$subscribe(() => publishDisplaySnapshot())
+    onDisplayRequest(publishDisplaySnapshot)
+    watch(() => session.settings?.enable_customer_display, publishDisplaySnapshot)
+    setupAutoLock()
+    // Who sees the welcome, or what is new since their last visit.
+    help.init()
+  }
+})
+
+// Auto-lock the till after a configured idle period (0 = manual lock only).
+let idleTimer = null
+function setupAutoLock() {
+  const reset = () => {
+    clearTimeout(idleTimer)
+    const mins = session.settings?.auto_lock_minutes || 0
+    if (!session.settings?.enable_till_lock || mins <= 0 || session.locked) return
+    idleTimer = setTimeout(() => session.lockTill(), mins * 60000)
+  }
+  for (const ev of ['mousemove', 'keydown', 'click', 'touchstart']) {
+    window.addEventListener(ev, reset, { passive: true })
+  }
+  reset()
+}
+</script>
+
+<style scoped>
+.shell {
+  display: flex;
+  height: 100vh;
+}
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.topbar {
+  height: 52px;
+  background: var(--topbar-bg);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  flex-shrink: 0;
+}
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  overflow: hidden;
+}
+.topbar-title {
+  font-size: 17px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+/* In a long language (Vietnamese, German) the shift timer is the one to give
+   way: it is cut short rather than pushing the bar onto two lines. */
+.tb-shift { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tb-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 4px 11px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.tb-clock { background: rgba(20, 99, 255, 0.2); color: #c8dcff; }
+.tb-shift { background: rgba(34, 197, 94, 0.18); color: #b3f0cb; }
+.tb-shift b { color: #fff; font-weight: 800; }
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+.topbar-user {
+  font-size: 12.5px;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+.lang-pill,
+.register-pill,
+.offline-pill { white-space: nowrap; }
+/* Below 1400px the user's name makes room: the outlet stays. */
+@media (max-width: 1400px) {
+  .topbar-user .user-name { display: none; }
+}
+.outlet-switch {
+  font-size: 12.5px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  max-width: 260px;
+}
+.outlet-switch option { color: var(--text); background: var(--card-bg); }
+/* A phone: the bar keeps to the screen. The clock and the shift timer go (the
+   register pill still says open or closed), and the buttons on the right
+   scroll inside the bar instead of pushing the whole page sideways (it was
+   about 500px wide at 390 on every screen). */
+@media (max-width: 700px) {
+  .topbar { padding: 0 10px; gap: 8px; }
+  .topbar-title { font-size: 15px; }
+  .tb-clock, .tb-shift { display: none; }
+  .help-word { display: none; }
+  .topbar-right {
+    flex: 1 1 auto;
+    flex-shrink: 1;
+    min-width: 0;
+    gap: 8px;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .topbar-right::-webkit-scrollbar { display: none; }
+  .outlet-switch { max-width: 150px; }
+}
+.register-pill {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: rgba(226, 48, 48, 0.25);
+  color: #ffb3b3;
+  cursor: pointer;
+}
+.register-pill:hover { filter: brightness(1.2); }
+.register-pill.open {
+  background: rgba(20, 99, 255, 0.28);
+  color: #aebfff;
+}
+.lang-pill {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  cursor: pointer;
+}
+.lang-pill:hover { background: rgba(255, 255, 255, 0.26); }
+.help-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.lang-menu { position: relative; }
+.lang-menu .lang-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.lang-list {
+  position: absolute;
+  top: calc(100% + 8px);
+  inset-inline-end: 0;
+  z-index: 60;
+  min-width: 170px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lang-option {
+  text-align: start;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--text);
+  background: transparent;
+  cursor: pointer;
+}
+.lang-option:hover { background: var(--surface-2); }
+.lang-option.active { background: var(--brand); color: #fff; }
+.offline-pill {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: rgba(245, 166, 35, 0.25);
+  color: #ffd591;
+  cursor: pointer;
+}
+.offline-pill.syncing {
+  background: rgba(0, 176, 185, 0.22);
+  color: #8fe3e8;
+}
+.content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  position: relative; /* scopes the open-register overlay to this area */
+}
+.boot-loading,
+.boot-error {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 16px;
+}
+.boot-card {
+  padding: 36px;
+  max-width: 460px;
+  text-align: center;
+}
+.boot-card h2 { margin-top: 0; }
+.boot-card p { color: var(--text-muted); }
+</style>

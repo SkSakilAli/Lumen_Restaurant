@@ -1,0 +1,114 @@
+{
+ "actions": [],
+ "autoname": "format:FLA-{#####}",
+ "creation": "2026-10-01 18:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "pos_profile",
+  "area_name",
+  "sort_order",
+  "column_break_area",
+  "photo",
+  "photo_opacity",
+  "section_objects",
+  "objects"
+ ],
+ "fields": [
+  {
+   "fieldname": "pos_profile",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "POS Profile",
+   "options": "POS Profile",
+   "reqd": 1
+  },
+  {
+   "description": "Its tables carry this name (POS Restaurant Table, Area). Renamed on the Tables screen, its tables follow.",
+   "fieldname": "area_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Area",
+   "reqd": 1
+  },
+  {
+   "fieldname": "sort_order",
+   "fieldtype": "Int",
+   "label": "Order of the tabs"
+  },
+  {
+   "fieldname": "column_break_area",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "A photo or drawing of the real floor under the plan, only a guide for arranging.",
+   "fieldname": "photo",
+   "fieldtype": "Attach Image",
+   "label": "Plan photo"
+  },
+  {
+   "default": "50",
+   "fieldname": "photo_opacity",
+   "fieldtype": "Int",
+   "label": "Photo strength (%)"
+  },
+  {
+   "fieldname": "section_objects",
+   "fieldtype": "Section Break",
+   "label": "On the plan"
+  },
+  {
+   "fieldname": "objects",
+   "fieldtype": "Table",
+   "label": "Walls, doors and the rest",
+   "options": "POS Floor Object"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-01 18:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Lumen Restaurants",
+ "name": "POS Floor Area",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "LumenPOS Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "LumenPOS Cashier"
+  }
+ ],
+ "search_fields": "area_name,pos_profile",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "area_name",
+ "track_changes": 1
+}

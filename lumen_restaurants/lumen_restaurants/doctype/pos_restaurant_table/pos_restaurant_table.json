@@ -1,0 +1,143 @@
+{
+ "actions": [],
+ "autoname": "format:TBL-{####}",
+ "creation": "2026-09-23 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "pos_profile",
+  "table_no",
+  "area",
+  "column_break_1",
+  "seats",
+  "disabled",
+  "section_plan",
+  "shape",
+  "rotation",
+  "column_break_plan",
+  "pos_x",
+  "pos_y"
+ ],
+ "fields": [
+  {
+   "fieldname": "pos_profile",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "POS Profile",
+   "options": "POS Profile",
+   "reqd": 1
+  },
+  {
+   "description": "What the staff call it: 12, A4, Counter 2.",
+   "fieldname": "table_no",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Table",
+   "reqd": 1
+  },
+  {
+   "description": "Main hall, Terrace, Family section. Tables are grouped by this on the floor screen.",
+   "fieldname": "area",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Area"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "4",
+   "fieldname": "seats",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Seats"
+  },
+  {
+   "default": "0",
+   "description": "Out of service: it stays in the records but the floor screen hides it.",
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabled"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_plan",
+   "fieldtype": "Section Break",
+   "label": "Floor plan"
+  },
+  {
+   "description": "How the table is drawn on the floor plan. Empty: square, or a rectangle from 6 seats.",
+   "fieldname": "shape",
+   "fieldtype": "Select",
+   "label": "Shape",
+   "options": "\nRound\nSquare\nRectangle\nBooth"
+  },
+  {
+   "fieldname": "rotation",
+   "fieldtype": "Int",
+   "label": "Rotation (degrees)"
+  },
+  {
+   "fieldname": "column_break_plan",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Where the table stands on the floor plan. Set by dragging it on the Tables screen, 0 and 0 until it is placed.",
+   "fieldname": "pos_x",
+   "fieldtype": "Int",
+   "label": "Across"
+  },
+  {
+   "fieldname": "pos_y",
+   "fieldtype": "Int",
+   "label": "Down"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-01 18:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Lumen Restaurants",
+ "name": "POS Restaurant Table",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "LumenPOS Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "LumenPOS Cashier"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

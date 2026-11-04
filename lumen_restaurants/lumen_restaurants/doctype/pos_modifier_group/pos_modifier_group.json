@@ -1,0 +1,159 @@
+{
+ "actions": [],
+ "autoname": "format:MOD-{####}",
+ "creation": "2026-09-28 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "group_name",
+  "multiple",
+  "required",
+  "max_choices",
+  "column_break_1",
+  "kitchen_style",
+  "print_default",
+  "disabled",
+  "options_section",
+  "options",
+  "shown_with_section",
+  "item_groups",
+  "items"
+ ],
+ "fields": [
+  {
+   "description": "What the cashier and the kitchen read: Heat level, Without, Sauces.",
+   "fieldname": "group_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Group",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "description": "Ticked: the guest may pick several (Without, Sauces). Not ticked: one choice only (Heat level, Doneness).",
+   "fieldname": "multiple",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Several choices"
+  },
+  {
+   "default": "0",
+   "description": "The cashier cannot add the dish until a choice is made.",
+   "fieldname": "required",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Required"
+  },
+  {
+   "default": "0",
+   "depends_on": "multiple",
+   "description": "0 means no limit.",
+   "fieldname": "max_choices",
+   "fieldtype": "Int",
+   "label": "At most"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Normal",
+   "description": "How its choices stand out on the kitchen screen: Without in red, Heat in amber, Cooking in violet.",
+   "fieldname": "kitchen_style",
+   "fieldtype": "Select",
+   "label": "On the kitchen screen",
+   "options": "Normal\nWithout\nHeat\nCooking"
+  },
+  {
+   "default": "0",
+   "description": "Show even the default choice to the kitchen, for a size or a dough.",
+   "fieldname": "print_default",
+   "fieldtype": "Check",
+   "label": "Show the default to the kitchen"
+  },
+  {
+   "default": "0",
+   "description": "A disabled group no longer shows at the till.",
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "in_standard_filter": 1,
+   "label": "Disabled"
+  },
+  {
+   "fieldname": "options_section",
+   "fieldtype": "Section Break",
+   "label": "Choices"
+  },
+  {
+   "fieldname": "options",
+   "fieldtype": "Table",
+   "label": "Choices",
+   "options": "POS Modifier Option",
+   "reqd": 1
+  },
+  {
+   "description": "A whole section covers every dish in it and in its sub-sections, the dishes added later too.",
+   "fieldname": "shown_with_section",
+   "fieldtype": "Section Break",
+   "label": "Shown with"
+  },
+  {
+   "fieldname": "item_groups",
+   "fieldtype": "Table",
+   "label": "Whole sections",
+   "options": "POS Modifier Item Group"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Single dishes",
+   "options": "POS Modifier Item"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-28 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Lumen Restaurants",
+ "name": "POS Modifier Group",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "LumenPOS Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "LumenPOS Cashier"
+  }
+ ],
+ "search_fields": "group_name",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "group_name",
+ "track_changes": 1
+}

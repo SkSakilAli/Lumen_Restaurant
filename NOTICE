@@ -1,0 +1,58 @@
+Lumen Restaurants
+Copyright (c) 2026 Lumen Solutions
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY, without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License along
+with this program. If not, see <https://www.gnu.org/licenses/>.
+
+"Lumen Restaurants", "LumenPOS" and their logos are trademarks of Lumen
+Solutions. They are not covered by the licence above. See TRADEMARKS.md.
+
+Lumen Restaurants is built from LumenPOS, the point of sale by the same
+author, and carries LumenPOS's code under the same licence. The licence history
+and the compatibility notes below are LumenPOS's, and they apply to that code
+here as well.
+
+
+LICENCE HISTORY
+---------------
+Up to and including 0.38.0    MIT
+0.39.0 to 0.42.1              GPL-3.0-or-later
+From 0.43.0                   AGPL-3.0-only
+
+Each change applies to new releases only. A grant already made is not revoked,
+and it cannot be. A copy obtained under MIT stays under MIT for its recipient,
+and a copy obtained under GPL-3.0-or-later stays under GPL-3.0-or-later,
+permanently.
+
+LumenPOS moved to the AGPL because it is software people use over a network.
+Under the GPL, a modified LumenPOS could be offered to shops as a hosted service
+without its changes ever being shared, because running a service is not
+distribution. Under the AGPL, anyone who runs a modified version for users over
+a network must offer those users its complete source code.
+
+
+COMPATIBILITY WITH ERPNEXT AND FRAPPE
+-------------------------------------
+LumenPOS calls ERPNext's own code directly (loyalty points, POS invoice
+consolidation and the credit note builder, see lumen_restaurants/erpnext_compat.py).
+ERPNext is licensed under version 3 of the GNU General Public License.
+
+The two licences are designed to be combined. Section 13 of the GPLv3 permits
+linking or combining a work it covers with a work licensed under version 3 of
+the GNU Affero General Public License into a single combined work, and section
+13 of the AGPLv3 gives the same permission from the other side. Each part keeps
+its own licence, and the network interaction requirement of the AGPLv3 applies
+to the combination as such.
+
+Frappe Framework is licensed under MIT, which is compatible with both.
+
+AGPL-3.0 is accepted on the Frappe Cloud Marketplace, which requires apps to be
+open source and compatible with MIT or the GPL.

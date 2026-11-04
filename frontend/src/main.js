@@ -1,0 +1,50 @@
+// Copyright (c) 2026 Lumen Solutions
+// SPDX-License-Identifier: AGPL-3.0-only
+// "LumenPOS" is a trademark of Lumen Solutions. See TRADEMARKS.md.
+import { createApp } from 'vue'
+import { createPinia } from 'pinia'
+import { createRouter, createWebHashHistory } from 'vue-router'
+
+import './theme' // applies saved/OS theme before first paint
+import { ready } from './i18n' // applies saved/browser language + RTL direction before first paint
+import App from './App.vue'
+import SellSwitch from './views/SellSwitch.vue'
+import HistoryView from './views/HistoryView.vue'
+import CustomersView from './views/CustomersView.vue'
+import HoldsView from './views/HoldsView.vue'
+import TablesView from './views/TablesView.vue'
+import KitchenView from './views/KitchenView.vue'
+import BarView from './views/BarView.vue'
+import ReservationsView from './views/ReservationsView.vue'
+import BookingDesignerView from './views/BookingDesignerView.vue'
+import MenuView from './views/MenuView.vue'
+import RegisterView from './views/RegisterView.vue'
+import InsightsView from './views/InsightsView.vue'
+import SettingsView from './views/SettingsView.vue'
+import CustomerDisplayView from './views/CustomerDisplayView.vue'
+import './styles.css'
+
+const router = createRouter({
+  history: createWebHashHistory(),
+  routes: [
+    { path: '/', component: SellSwitch },
+    { path: '/history', component: HistoryView },
+    { path: '/customers', component: CustomersView },
+    { path: '/holds', component: HoldsView },
+    { path: '/tables', component: TablesView },
+    { path: '/kitchen', component: KitchenView },
+    { path: '/bar', component: BarView },
+    { path: '/reservations', component: ReservationsView },
+    { path: '/booking-designer', component: BookingDesignerView },
+    { path: '/menu', component: MenuView },
+    { path: '/register', component: RegisterView },
+    { path: '/insights', component: InsightsView },
+    { path: '/settings', component: SettingsView },
+    // Second-screen customer-facing display, chrome-free, no bootstrap.
+    { path: '/display', component: CustomerDisplayView },
+  ],
+})
+
+// A language outside the main bundle is fetched first, so the first screen is
+// already in it (English and Arabic resolve at once).
+ready.finally(() => createApp(App).use(createPinia()).use(router).mount('#app'))

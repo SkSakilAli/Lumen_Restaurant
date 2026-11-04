@@ -1,0 +1,73 @@
+{
+ "actions": [],
+ "creation": "2026-10-01 18:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "kind",
+  "label",
+  "pos_x",
+  "pos_y",
+  "width",
+  "depth",
+  "rotation"
+ ],
+ "fields": [
+  {
+   "fieldname": "kind",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Kind",
+   "options": "Wall\nDoor\nWindow\nFence\nPlant\nCashier\nKitchen\nRestrooms\nHand wash",
+   "reqd": 1
+  },
+  {
+   "fieldname": "label",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Label"
+  },
+  {
+   "fieldname": "pos_x",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Across"
+  },
+  {
+   "fieldname": "pos_y",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Down"
+  },
+  {
+   "fieldname": "width",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Length or width"
+  },
+  {
+   "fieldname": "depth",
+   "fieldtype": "Int",
+   "label": "Depth"
+  },
+  {
+   "fieldname": "rotation",
+   "fieldtype": "Int",
+   "label": "Rotation (degrees)"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-01 18:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Lumen Restaurants",
+ "name": "POS Floor Object",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}
