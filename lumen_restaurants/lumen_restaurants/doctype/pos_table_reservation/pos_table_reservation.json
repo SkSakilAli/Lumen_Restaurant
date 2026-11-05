@@ -1,7 +1,7 @@
 {
  "actions": [],
  "autoname": "naming_series:",
- "creation": "2026-09-24 00:00:00.000000",
+ "creation": "2026-09-24 00:00:00",
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
@@ -70,7 +70,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Requested\nConfirmed\nSeated\nNo show\nCancelled"
+   "options": "Requested\nConfirmed\nSeated\nNo show\nCancelled\nTo be cleaned"
   },
   {
    "default": "Till",
@@ -128,11 +128,11 @@
    "label": "From the booking page"
   },
   {
+   "description": "What the customer filled in on the page, as it was labelled that day.",
    "fieldname": "answers",
    "fieldtype": "Long Text",
    "label": "Answers",
-   "read_only": 1,
-   "description": "What the customer filled in on the page, as it was labelled that day."
+   "read_only": 1
   },
   {
    "fieldname": "items",
@@ -167,10 +167,9 @@
    "read_only": 1
   }
  ],
- "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-09-24 00:00:00.000000",
- "modified_by": "Administrator",
+ "modified": "2026-11-05 13:46:48.641221",
+ "modified_by": "sample@email.com",
  "module": "Lumen Restaurants",
  "name": "POS Table Reservation",
  "naming_rule": "By \"Naming Series\" field",
@@ -209,6 +208,7 @@
    "write": 1
   }
  ],
+ "row_format": "Dynamic",
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],

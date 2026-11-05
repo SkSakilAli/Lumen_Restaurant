@@ -316,6 +316,8 @@ onUnmounted(stop)
 .tbl.s-bill .chair { fill: var(--t-bill-chair); stroke: var(--t-bill-stroke); }
 .tbl.s-book .top { fill: var(--t-book-fill); stroke: var(--t-book-stroke); }
 .tbl.s-book .chair { fill: var(--t-book-chair); stroke: var(--t-book-stroke); }
+.tbl.s-to-clean .top { fill: var(--t-clean-fill); stroke: var(--t-clean-stroke); }
+.tbl.s-to-clean .chair { fill: var(--t-clean-chair); stroke: var(--t-clean-stroke); }
 .tbl.s-off .top,
 .tbl.s-off .chair { fill: var(--surface-2); stroke: var(--t-free-stroke); stroke-dasharray: 5 4; }
 .tbl .no { fill: var(--text); font-size: 19px; font-weight: 800; font-family: var(--font); }
@@ -325,6 +327,7 @@ onUnmounted(stop)
 .badge-g.b-busy rect { fill: var(--badge-busy); }
 .badge-g.b-bill rect { fill: var(--badge-bill); }
 .badge-g.b-book rect { fill: var(--badge-book); }
+.badge-g.b-to-clean rect { fill: var(--badge-clean); }
 .badge-g text { fill: #fff; font-size: 11px; font-weight: 700; }
 .badge-g .bdg-ic { fill: none; stroke: #fff; stroke-width: 1.3; stroke-linejoin: round; stroke-linecap: round; }
 .plan:not(.editing):not(.picking) .tbl:hover .ring { stroke: var(--border-strong); stroke-width: 2; }

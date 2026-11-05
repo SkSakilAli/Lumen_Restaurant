@@ -111,9 +111,10 @@ def save_plan(pos_profile: str, plan: dict | list | str):
 
     `plan` = {areas: [{name, area_name, old_name, photo, photo_opacity,
     objects: [{kind, label, x, y, w, h, rot}]}], tables: [{name, table_no,
-    area, seats, shape, x, y, rot, disabled}], deleted_tables: [name],
-    deleted_areas: [name]}. A table or an area without a name is new. A table
-    names its area by the area's name in this same plan."""
+    area, seats, shape, x, y, rot, disabled, needs_cleaning}],
+    deleted_tables: [name], deleted_areas: [name]}. A table or an area
+    without a name is new. A table names its area by the area's name in this
+    same plan."""
     restaurant._assert_outlet(pos_profile)
     restaurant._assert_enabled(pos_profile)
     if not floor.plan_on(pos_profile):
@@ -159,7 +160,11 @@ def save_plan(pos_profile: str, plan: dict | list | str):
             frappe.throw(_("That area belongs to another outlet"))
     known = {
         r.name: r
-        for r in frappe.get_all(TABLE, filters={"pos_profile": pos_profile}, fields=["name", "table_no", "area", "disabled"])
+        for r in frappe.get_all(
+            TABLE,
+            filters={"pos_profile": pos_profile},
+            fields=["name", "table_no", "area", "disabled", "needs_cleaning"],
+        )
     }
     open_on = {
         row.table: row.name
@@ -214,6 +219,9 @@ def save_plan(pos_profile: str, plan: dict | list | str):
                 "pos_y": _clamp(row.get("y"), *floor.LIMIT_Y),
                 "rotation": cint(row.get("rot")) % 360,
                 "disabled": disabled,
+                "needs_cleaning": 1
+                if cint(row.get("needs_cleaning", known[name].needs_cleaning if name else 0))
+                else 0,
             }
         )
     in_plan = {row["name"] for row in cleaned if row["name"]}
@@ -274,7 +282,17 @@ def save_plan(pos_profile: str, plan: dict | list | str):
     for row in cleaned:
         doc = frappe.get_doc(TABLE, row["name"]) if row["name"] else frappe.new_doc(TABLE)
         doc.pos_profile = pos_profile
-        for field in ("table_no", "area", "seats", "shape", "pos_x", "pos_y", "rotation", "disabled"):
+        for field in (
+            "table_no",
+            "area",
+            "seats",
+            "shape",
+            "pos_x",
+            "pos_y",
+            "rotation",
+            "disabled",
+            "needs_cleaning",
+        ):
             doc.set(field, row[field])
         doc.save(ignore_permissions=True)
     return restaurant.get_floor(pos_profile)

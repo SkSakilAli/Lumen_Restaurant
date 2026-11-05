@@ -109,6 +109,17 @@
     </div>
   </template>
 
+  <template v-else-if="table.to_clean">
+    <div class="p-body">
+      <p class="hint">{{ t('This table needs cleaning before it can receive another order.') }}</p>
+    </div>
+    <div v-if="perms.open" class="p-foot">
+      <button type="button" class="btn btn-primary btn-lg btn-block" :disabled="busy" @click="$emit('clean')">
+        <FloorIcon name="check" />{{ t('Mark as cleaned') }}
+      </button>
+    </div>
+  </template>
+
   <template v-else-if="booking">
     <div class="p-body">
       <div class="meta">
@@ -178,7 +189,7 @@ import FloorIcon from './FloorIcon.vue'
 import { clockOf } from './plan'
 
 const props = defineProps({
-  // The live table: { table_no, seats, order, booking, ... }
+  // The live table: { table_no, seats, order, booking, needs_cleaning, to_clean, ... }
   table: { type: Object, required: true },
   status: { type: String, required: true },
   statusLabel: { type: String, required: true },
@@ -191,7 +202,7 @@ const props = defineProps({
   // { sell, open, move, cancel }
   perms: { type: Object, required: true },
 })
-defineEmits(['close', 'start', 'seated', 'open', 'pay', 'print', 'move', 'merge', 'cancel-start', 'cancel-confirm', 'back'])
+defineEmits(['close', 'start', 'clean', 'seated', 'open', 'pay', 'print', 'move', 'merge', 'cancel-start', 'cancel-confirm', 'back'])
 
 const guests = defineModel('guests', { type: Number, default: 2 })
 const note = defineModel('note', { type: String, default: '' })

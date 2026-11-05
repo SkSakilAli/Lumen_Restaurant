@@ -319,6 +319,13 @@
                   <span class="setting-desc">{{ t('A table that is out of service keeps its history and disappears from the floor screen.') }}</span>
                 </span>
               </label>
+              <label class="setting-row">
+                <input type="checkbox" class="setting-toggle" :checked="selTableDraft.needs_cleaning" @change="setNeedsCleaning($event)" />
+                <span class="setting-text">
+                  <span class="setting-title">{{ t('Needs cleaning') }}</span>
+                  <span class="setting-desc">{{ t('After each paid order, this table is blocked until staff mark it clean.') }}</span>
+                </span>
+              </label>
             </div>
           </div>
           <div class="p-foot">
@@ -428,6 +435,7 @@
         :perms="perms"
         @close="closePanel"
         @start="startOrder"
+        @clean="markTableCleaned"
         @seated="seat"
         @open="openOrder(selTable.order.name)"
         @pay="payTable"
@@ -485,7 +493,7 @@ const router = useRouter()
 const session = useSessionStore()
 const cart = useCartStore()
 
-const LEGEND = ['free', 'busy', 'bill', 'book']
+const LEGEND = ['free', 'busy', 'bill', 'book', 'to-clean']
 const SHAPE_LABEL = { round: 'Round', square: 'floor:Square', rect: 'Rectangle', booth: 'Booth' }
 const KIND_LABEL = {
   wall: 'Wall',
@@ -498,7 +506,14 @@ const KIND_LABEL = {
   wc: 'Restrooms',
   sink: 'Hand wash',
 }
-const STATUS_LABEL = { free: 'floor:Free', busy: 'Occupied', bill: 'Bill requested', book: 'Booked', off: 'Out of service' }
+const STATUS_LABEL = {
+  free: 'floor:Free',
+  busy: 'Occupied',
+  bill: 'Bill requested',
+  book: 'Booked',
+  off: 'Out of service',
+  'to-clean': 'To clean',
+}
 const shapeLabel = (sh) => t(SHAPE_LABEL[sh])
 const kindLabel = (k) => t(KIND_LABEL[k])
 const statusLabel = (st) => t(STATUS_LABEL[st])
@@ -568,6 +583,8 @@ function toTable(row) {
     y: row.pos_y || 0,
     rot: row.rotation || 0,
     disabled: Boolean(row.disabled),
+    needs_cleaning: Boolean(row.needs_cleaning),
+    to_clean: Boolean(row.to_clean),
     order: row.order || null,
     booking: row.booking || null,
   }
@@ -621,6 +638,7 @@ const hasTables = computed(() => data.tables.length > 0 || data.off.length > 0)
 function statusOf(tb) {
   if (tb.disabled) return 'off'
   if (tb.order) return tb.order.bill_printed_at ? 'bill' : 'busy'
+  if (tb.to_clean) return 'to-clean'
   if (tb.booking) return 'book'
   return 'free'
 }
@@ -660,7 +678,7 @@ const listSections = computed(() => {
 })
 const legend = computed(() => {
   const list = areaSel.value === 'all' || !areaSel.value ? data.tables : liveTablesIn(areaSel.value)
-  const out = { free: 0, busy: 0, bill: 0, book: 0, guests: 0 }
+  const out = { free: 0, busy: 0, bill: 0, book: 0, 'to-clean': 0, guests: 0 }
   for (const tb of list) {
     out[statusOf(tb)] += 1
     if (tb.order) out.guests += tb.order.guests || 0
@@ -724,6 +742,9 @@ const planTables = computed(() => {
     if (tb.order) {
       sub = Number(tb.order.total || 0).toFixed(2)
       badge = { kind: status, text: sinceText(tb.order.opened_at) }
+    } else if (tb.to_clean) {
+      sub = t('To clean')
+      badge = { kind: status, text: sub }
     } else if (tb.booking) {
       sub = t('{n} guests', { n: tb.booking.guests })
       badge = { kind: 'book', text: clockOf(tb.booking.time, t) }
@@ -818,6 +839,24 @@ async function startOrder() {
       note: noteDraft.value || null,
     })
     await goToOrder(order)
+  } catch (e) {
+    session.notify(e.message, true)
+  } finally {
+    busy.value = false
+  }
+}
+
+async function markTableCleaned() {
+  const tb = selTable.value
+  if (!tb?.to_clean) return
+  busy.value = true
+  try {
+    const res = await call('lumen_restaurants.api.restaurant.mark_table_cleaned', {
+      pos_profile: session.posProfile,
+      table: tb.name,
+    })
+    applyFloor(res)
+    session.notify(t('{table} is marked clean', { table: tableLabel(tb) }))
   } catch (e) {
     session.notify(e.message, true)
   } finally {
@@ -1081,6 +1120,7 @@ function startEdit() {
     y: tb.y,
     rot: tb.rot,
     disabled: tb.disabled,
+    needs_cleaning: tb.needs_cleaning || false,
     hasOrder: Boolean(tb.order),
   }))
   draft.value = { areas, tables, deletedTables: [], deletedAreas: [] }
@@ -1221,6 +1261,10 @@ function setOff(event) {
   }
   tb.disabled = event.target.checked
 }
+function setNeedsCleaning(event) {
+  const tb = selTableDraft.value
+  if (tb) tb.needs_cleaning = event.target.checked
+}
 function askDelete() {
   if (selTableDraft.value?.hasOrder) return session.notify(t('This table has an open order. Move or close it first.'), true)
   confirmDelete.value = true
@@ -1353,6 +1397,7 @@ async function saveEdit() {
       y: tb.y,
       rot: tb.rot || 0,
       disabled: tb.disabled ? 1 : 0,
+      needs_cleaning: tb.needs_cleaning ? 1 : 0,
     })),
     deleted_tables: d.deletedTables,
     deleted_areas: d.deletedAreas,

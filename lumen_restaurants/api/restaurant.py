@@ -233,7 +233,7 @@ def get_floor(pos_profile: str):
     rows = frappe.get_all(
         TABLE,
         filters={"pos_profile": pos_profile},
-        fields=["name", "table_no", "area", "seats", "disabled", *layout],
+        fields=["name", "table_no", "area", "seats", "disabled", "needs_cleaning", "to_clean", *layout],
         order_by="area asc, table_no asc",
         limit_page_length=0,
     )
@@ -346,7 +346,13 @@ def open_order(
         # Two waiters can tap the same table at the same moment. Locking the
         # table row first makes the second one wait, then fail the check, so a
         # table can never end up with two open orders.
-        frappe.db.get_value(TABLE, table, "name", for_update=True)
+        table_row = frappe.db.get_value(
+            TABLE, table, ["pos_profile", "to_clean"], as_dict=True, for_update=True
+        )
+        if not table_row or table_row.pos_profile != pos_profile:
+            frappe.throw(_("That table belongs to another outlet"))
+        if cint(table_row.to_clean):
+            frappe.throw(_("This table needs to be marked clean before opening a new order"))
         twin = frappe.db.exists(ORDER, {"table": table, "status": "Open"})
         if twin:
             frappe.throw(_("That table already has an open order ({0})").format(twin))
@@ -368,6 +374,24 @@ def open_order(
         }
     ).insert()
     return _as_dict(doc, with_cart=True)
+
+
+@frappe.whitelist()
+def mark_table_cleaned(pos_profile: str, table: str):
+    _assert_outlet(pos_profile)
+    _assert_enabled(pos_profile)
+    _assert_can(permissions.OPEN_TABLE)
+    table_row = frappe.db.get_value(
+        TABLE, table, ["pos_profile", "to_clean"], as_dict=True, for_update=True
+    )
+    if not table_row or table_row.pos_profile != pos_profile:
+        frappe.throw(_("That table belongs to another outlet"))
+    if not cint(table_row.to_clean):
+        frappe.throw(_("This table is not waiting to be cleaned"))
+    if frappe.db.exists(ORDER, {"table": table, "status": "Open"}):
+        frappe.throw(_("Close the open order before cleaning the table"))
+    frappe.db.set_value(TABLE, table, "to_clean", 0, update_modified=False)
+    return get_floor(pos_profile)
 
 
 @frappe.whitelist()
@@ -822,11 +846,17 @@ def print_bill(name: str, printer: int | str | bool = 0):
 def close_order(name, invoice, amount):
     """The order was paid. Called by sales.submit_sale, never by the client.
 
-    The table is free the moment the money is in, which is why this runs on the
-    sale itself and not on a later click a cashier could forget."""
+    Tables configured to require cleaning get a separate temporary block in the
+    same transaction; the paid order itself still closes normally."""
     doc = frappe.get_doc(ORDER, name)
     if doc.status != "Open":
         return
+    if doc.table:
+        table_row = frappe.db.get_value(
+            TABLE, doc.table, "needs_cleaning", for_update=True
+        )
+        if cint(table_row):
+            frappe.db.set_value(TABLE, doc.table, "to_clean", 1, update_modified=False)
     doc.append(
         "invoices",
         {"invoice": invoice, "amount": flt(amount, 2), "billed_at": now_datetime()},

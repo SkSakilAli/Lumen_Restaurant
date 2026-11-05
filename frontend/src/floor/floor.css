@@ -28,9 +28,13 @@
   --t-book-fill: #e9e3ff;
   --t-book-stroke: #6d4aff;
   --t-book-chair: #c4b5ff;
+  --t-clean-fill: #fde8e8;
+  --t-clean-stroke: #d92d20;
+  --t-clean-chair: #fda29b;
   --badge-busy: #1463ff;
   --badge-bill: #a2630c;
   --badge-book: #6d4aff;
+  --badge-clean: #b42318;
   --border-strong: #cfd6e2;
   --brand-tint: #e8efff;
   --sel: #1463ff;
@@ -69,6 +73,10 @@
   --t-book-fill: #241c4d;
   --t-book-stroke: #9b83ff;
   --t-book-chair: #3d3175;
+  --t-clean-fill: #3a1515;
+  --t-clean-stroke: #f97066;
+  --t-clean-chair: #7a271a;
+  --badge-clean: #d92d20;
   --border-strong: #343d51;
   --brand-tint: #16264a;
   --sel: #6ba4ff;
@@ -245,6 +253,7 @@
 .floor .sw.s-busy { background: var(--t-busy-fill); border-color: var(--t-busy-stroke); }
 .floor .sw.s-bill { background: var(--t-bill-fill); border-color: var(--t-bill-stroke); }
 .floor .sw.s-book { background: var(--t-book-fill); border-color: var(--t-book-stroke); }
+.floor .sw.s-to-clean { background: var(--t-clean-fill); border-color: var(--t-clean-stroke); }
 .floor .loose { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .floor .loose-chip {
   display: inline-flex;
@@ -284,6 +293,7 @@
 .floor .t-card.s-busy { border-color: var(--t-busy-stroke); background: var(--t-busy-fill); }
 .floor .t-card.s-bill { border-color: var(--t-bill-stroke); background: var(--t-bill-fill); }
 .floor .t-card.s-book { border-color: var(--t-book-stroke); background: var(--t-book-fill); }
+.floor .t-card.s-to-clean { border-color: var(--t-clean-stroke); background: var(--t-clean-fill); }
 .floor .t-card.selected { outline: 3px solid var(--sel); outline-offset: 2px; }
 .floor .picking-list .t-card:not(.eligible) { opacity: 0.32; }
 .floor .picking-list .t-card.eligible { outline: 2px dashed var(--sel); outline-offset: 2px; }
@@ -333,6 +343,7 @@
 .floor .chip.s-busy { background: var(--badge-busy); }
 .floor .chip.s-bill { background: var(--badge-bill); }
 .floor .chip.s-book { background: var(--badge-book); }
+.floor .chip.s-to-clean { background: var(--badge-clean); }
 .floor .chip.s-off { background: var(--surface-2); color: var(--text-muted); }
 .floor .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .floor .meta.one { grid-template-columns: minmax(0, 1fr); }
