@@ -1,0 +1,39 @@
+{
+ "actions": [],
+ "creation": "2026-11-06 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "event_type",
+  "role"
+ ],
+ "fields": [
+  {
+   "fieldname": "event_type",
+   "fieldtype": "Select",
+   "label": "Action",
+   "options": "kitchen_ticket_created\nbar_ticket_created\nticket_preparing\nticket_ready\nticket_done\ntable_order_opened\ntable_order_moved\ntable_order_merged\ntable_order_cancelled\ntable_order_paid\nreservation_requested\nreservation_confirmed\nreservation_updated\nreservation_seated\nreservation_cancelled\nreservation_no_show\nsale_completed\nreturn_completed\napproval_requested\napproval_approved\napproval_rejected\nregister_opened\nregister_closed\nregister_variance\nstock_out",
+   "reqd": 1
+  },
+  {
+   "fieldname": "role",
+   "fieldtype": "Link",
+   "label": "Recipient Role",
+   "options": "Role",
+   "reqd": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-11-06 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Lumen Restaurants",
+ "name": "POS Notification Rule",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "ASC",
+ "states": [],
+ "track_changes": 0
+}

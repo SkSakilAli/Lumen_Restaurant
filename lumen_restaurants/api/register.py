@@ -330,6 +330,15 @@ def open_register(pos_profile: str, opening_float: float | str = 0, resume_openi
         sess.insert()
         _pin_rates(sess.name, profile)
         _audit_register("open", sess.name, profile.name, opening_float)
+        from lumen_restaurants.api.notifications import notify_event
+
+        notify_event(
+            "register_opened",
+            profile.name,
+            message=sess.name,
+            reference_doctype="POS Register Session",
+            reference_name=sess.name,
+        )
         return get_open_session(pos_profile)
 
     # 2) Nothing live on this register -> always a brand-new shift. Any stale
@@ -451,6 +460,15 @@ def _create_fresh_session(profile, opening_float, bypass_live_guard=False, float
     sess.insert()
     _pin_rates(sess.name, profile)
     _audit_register("open", sess.name, profile.name, opening_float)
+    from lumen_restaurants.api.notifications import notify_event
+
+    notify_event(
+        "register_opened",
+        profile.name,
+        message=sess.name,
+        reference_doctype="POS Register Session",
+        reference_name=sess.name,
+    )
     return get_open_session(profile.name)
 
 
@@ -567,6 +585,19 @@ def _maybe_alert_variance(doc):
     except Exception:
         frappe.log_error(
             title="LumenPOS variance alert failed", message=frappe.get_traceback()
+        )
+
+
+def _notify_register_variance(doc):
+    if any(abs(flt(row.difference)) > 0.005 for row in doc.get("payment_counts") or []):
+        from lumen_restaurants.api.notifications import notify_event
+
+        notify_event(
+            "register_variance",
+            doc.pos_profile,
+            message=doc.name,
+            reference_doctype="POS Register Session",
+            reference_name=doc.name,
         )
 
 
@@ -1018,6 +1049,7 @@ def close_register(
     # goes out once they are filled in (_fill_pending_figures).
     if summary:
         _maybe_alert_variance(doc)
+        _notify_register_variance(doc)
 
     if doc.get("pos_opening_entry"):
         _enqueue_consolidation(doc.name, counted)
@@ -1270,6 +1302,7 @@ def _fill_pending_figures(session_name, closing=None, quiet=False):
             frappe.log_error(title="LumenPOS: filling in a closed shift's figures", message=frappe.get_traceback())
         return
     _maybe_alert_variance(doc)
+    _notify_register_variance(doc)
 
 
 def fill_pending_figures():
@@ -1916,12 +1949,24 @@ def _suppress_consolidation(closing):
 
 
 def _mark_closed(session_name, closing_name):
+    was_closed = frappe.db.get_value("POS Register Session", session_name, "status") == "Closed"
     values = {"status": "Closed", "closing_status": "Submitted", "closing_error": None}
     if closing_name:
         values["pos_closing_entry"] = closing_name
     frappe.db.set_value("POS Register Session", session_name, values)
     # Enqueued consolidation job, persist the closed state immediately.
     frappe.db.commit()  # nosemgrep
+    if not was_closed:
+        session = frappe.get_doc("POS Register Session", session_name)
+        from lumen_restaurants.api.notifications import notify_event
+
+        notify_event(
+            "register_closed",
+            session.pos_profile,
+            message=session.name,
+            reference_doctype="POS Register Session",
+            reference_name=session.name,
+        )
 
 
 def _mark_failed(session_name, closing_name, error):

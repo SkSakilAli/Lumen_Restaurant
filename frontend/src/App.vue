@@ -18,6 +18,7 @@
           </span>
         </div>
         <div class="topbar-right">
+          <NotificationBell />
           <!-- Help for this screen (0.58.0, Settings, General, Help for staff). -->
           <button
             v-if="help.inTill"
@@ -169,6 +170,7 @@ import { publishCart, onDisplayRequest } from './customerDisplay'
 import { ensurePersistentStorage } from './offline'
 import { t, locale, setLocale, offeredLanguages, LANGUAGES } from './i18n'
 import Icon from './components/Icon.vue'
+import NotificationBell from './components/NotificationBell.vue'
 import NavRail from './components/NavRail.vue'
 import OpenRegisterOverlay from './components/OpenRegisterOverlay.vue'
 import LockOverlay from './components/LockOverlay.vue'

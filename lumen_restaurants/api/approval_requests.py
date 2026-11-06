@@ -193,6 +193,15 @@ def create_request(
         }
     )
     doc.insert(ignore_permissions=True)
+    from lumen_restaurants.api.notifications import notify_event
+
+    notify_event(
+        "approval_requested",
+        pos_profile,
+        message=_("{0} request from {1}").format(request_type, doc.cashier_name),
+        reference_doctype=REQUEST_DOCTYPE,
+        reference_name=doc.name,
+    )
     # A lightweight ping (only the POS Profile name, no PII) so any approver on
     # this site can pick it up, there's no single target user to scope to.
     frappe.publish_realtime(  # nosemgrep
@@ -308,6 +317,15 @@ def _decide(name, status, note=None):
     doc.decided_at = now_datetime()
     doc.decision_note = (note or "").strip() or None
     doc.save(ignore_permissions=True)
+    from lumen_restaurants.api.notifications import notify_event
+
+    notify_event(
+        "approval_approved" if status == "Approved" else "approval_rejected",
+        doc.pos_profile,
+        message=_("{0} request").format(doc.request_type),
+        reference_doctype=REQUEST_DOCTYPE,
+        reference_name=doc.name,
+    )
     # Targeted at the waiting cashier (the message carries their name) instead of
     # broadcasting it to every user on the site.
     frappe.publish_realtime(

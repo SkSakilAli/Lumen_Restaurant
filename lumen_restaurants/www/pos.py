@@ -13,4 +13,8 @@ def get_context(context):
     context.csrf_token = frappe.sessions.get_csrf_token()
     from lumen_restaurants import __version__
     context.lumenpos_version = __version__
+    frappe_major = int(str(getattr(frappe, "__version__", "13")).split(".", 1)[0])
+    context.socketio_site = frappe.local.site if frappe_major >= 15 else ""
+    context.socketio_port = int(frappe.conf.get("socketio_port") or (9000 if frappe_major >= 15 else 3000))
+    context.socketio_dev = bool(frappe.conf.get("developer_mode"))
     return context

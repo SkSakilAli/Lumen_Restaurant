@@ -24,6 +24,9 @@
   <script>
     window.csrf_token = "{{ csrf_token }}";
     window.lumenpos_version = "{{ lumenpos_version }}";
+    window.lumenpos_socketio_site = "{{ socketio_site }}";
+    window.lumenpos_socketio_port = {{ socketio_port }};
+    window.lumenpos_socketio_dev = {{ "true" if socketio_dev else "false" }};
     // Keep the shell on the device so the till opens with no connection at
     // all, and so a reload during an outage is not the end of the shift.
     // Registered with the version, a release is a new worker and a new cache.

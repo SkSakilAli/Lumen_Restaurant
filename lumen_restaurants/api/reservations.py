@@ -142,7 +142,8 @@ def save_reservation(payload: dict | list | str):
         payload = json.loads(payload)
     pos_profile = payload.get("pos_profile")
     restaurant._assert_outlet(pos_profile)
-    if payload.get("name"):
+    is_new = not payload.get("name")
+    if not is_new:
         doc = frappe.get_doc(RES, payload["name"])
         if doc.pos_profile != pos_profile:
             frappe.throw(_("That reservation belongs to another outlet"))
@@ -159,6 +160,15 @@ def save_reservation(payload: dict | list | str):
     doc.table = payload.get("table") or None
     doc.note = (payload.get("note") or "").strip() or None
     doc.save()
+    from lumen_restaurants.api.notifications import notify_event
+
+    notify_event(
+        "reservation_confirmed" if is_new else "reservation_updated",
+        pos_profile,
+        message=f"{doc.customer_name} · {doc.reservation_date} {doc.reservation_time}",
+        reference_doctype=RES,
+        reference_name=doc.name,
+    )
     return {"name": doc.name}
 
 
@@ -173,6 +183,7 @@ def set_reservation_status(name: str, status: str):
     doc = frappe.get_doc(RES, name)
     doc.check_permission("write")
     restaurant._assert_outlet(doc.pos_profile)
+    previous_status = doc.status
     opened = None
     if status == "Seated" and doc.table and not frappe.db.exists(
         "POS Restaurant Order", {"table": doc.table, "status": "Open"}
@@ -206,6 +217,22 @@ def set_reservation_status(name: str, status: str):
             opened = restaurant.get_order(opened["name"])
     doc.status = status
     doc.save(ignore_permissions=True)
+    event_type = {
+        "Confirmed": "reservation_confirmed",
+        "Seated": "reservation_seated",
+        "Cancelled": "reservation_cancelled",
+        "No show": "reservation_no_show",
+    }.get(status)
+    if event_type and status != previous_status:
+        from lumen_restaurants.api.notifications import notify_event
+
+        notify_event(
+            event_type,
+            doc.pos_profile,
+            message=f"{doc.customer_name} · {doc.reservation_date} {doc.reservation_time}",
+            reference_doctype=RES,
+            reference_name=doc.name,
+        )
     return {"status": doc.status, "order": opened}
 
 
@@ -407,6 +434,15 @@ def book_online(pos_profile: str | None = None, customer_name: str | None = None
         }
     )
     doc.insert(ignore_permissions=True)
+    from lumen_restaurants.api.notifications import notify_event
+
+    notify_event(
+        "reservation_confirmed" if status == "Confirmed" else "reservation_requested",
+        pos_profile,
+        message=f"{doc.customer_name} · {doc.reservation_date} {doc.reservation_time}",
+        reference_doctype=RES,
+        reference_name=doc.name,
+    )
     # A guest request must survive its own response. The marker stays bare:
     # semgrep reads any words after its colon as rule ids and suppresses nothing.
     frappe.db.commit()  # nosemgrep

@@ -772,6 +772,13 @@ def submit_sale(payload: dict | str):
     posted = _insert_once(invoice, key)
     if posted:
         return _sale_answer(posted)
+    from lumen_restaurants.api import notifications
+
+    stock_before = (
+        _stock_after(invoice)
+        if notifications.has_event_recipients("stock_out")
+        else None
+    )
     t_insert = _perf_now()
     # The change account ERPNext settled on must be one this sale can book.
     currency.check_change(invoice)
@@ -843,7 +850,29 @@ def submit_sale(payload: dict | str):
     if restaurant_meta:
         receipt["order_no"] = str(restaurant_meta["order_no"])
         receipt["kitchen_ticket"] = restaurant_meta.get("ticket")
-    receipt["stock_after"] = _stock_after(invoice)
+    stock_after = _stock_after(invoice)
+    receipt["stock_after"] = stock_after
+    if stock_before is not None:
+        newly_out = [
+            code
+            for code, quantity in stock_after.items()
+            if quantity <= 0 and stock_before.get(code, 0) > 0
+        ]
+        if newly_out:
+            notifications.notify_event(
+                "stock_out",
+                profile.name,
+                message=", ".join(newly_out),
+                reference_doctype=invoice.doctype,
+                reference_name=invoice.name,
+            )
+    notifications.notify_event(
+        "sale_completed",
+        profile.name,
+        message=invoice.name,
+        reference_doctype=invoice.doctype,
+        reference_name=invoice.name,
+    )
     _log_slow_sale(
         invoice.name,
         started=_started,
@@ -3186,6 +3215,15 @@ def create_return(
         register.post_returns_now([return_doc.name])
     receipt = get_receipt(return_doc.name)
     receipt["stock_after"] = _stock_after(return_doc)
+    from lumen_restaurants.api.notifications import notify_event
+
+    notify_event(
+        "return_completed",
+        original.get("pos_profile"),
+        message=return_doc.name,
+        reference_doctype=return_doc.doctype,
+        reference_name=return_doc.name,
+    )
     if offline:
         receipt["offline_gap"] = gap
     return receipt

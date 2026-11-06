@@ -925,6 +925,23 @@ presses **Ready** and the sell screen shows a blue call strip: shout the
 number, hand the bag over, press **Handed over**. Dine-in tickets carry the
 table name instead, a table needs no number.
 
+### Live order notifications
+
+Configure **POS Settings → General → Notifications** to choose which roles
+receive each event. Add one row per event and recipient role; add multiple
+rows when several roles should be notified. A recipient must be an enabled
+user with that role and access to the event's outlet. Notifications do not grant
+POS permissions or outlet access. Events without a configured role are silent.
+
+The configurable events cover Kitchen and Bar ticket creation and status
+changes; table orders opened, moved, merged, cancelled, or paid; reservation
+requests and status changes; completed sales and returns; approval requests
+and decisions; register opening, closing, and cash variance; and stock reaching
+zero. The bell in the top bar keeps unread notifications until opened, and
+selecting one takes staff to the relevant screen. Kitchen and Bar screens
+continue refreshing their ticket boards if a realtime connection is temporarily
+unavailable.
+
 ### Who served the order, and the help
 
 Where the outlet has salespeople, the order screen shows **Salesperson** under

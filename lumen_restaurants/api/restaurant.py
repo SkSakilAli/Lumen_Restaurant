@@ -373,6 +373,15 @@ def open_order(
             "cart": json.dumps({"lines": []}),
         }
     ).insert()
+    from lumen_restaurants.api.notifications import notify_event
+
+    notify_event(
+        "table_order_opened",
+        pos_profile,
+        message=doc.table or doc.name,
+        reference_doctype=ORDER,
+        reference_name=doc.name,
+    )
     return _as_dict(doc, with_cart=True)
 
 
@@ -598,6 +607,7 @@ def move_order(name: str, table: str | None = None):
     doc = _open_doc(name)
     if doc.status != "Open":
         frappe.throw(_("This order is {0}").format(_(doc.status)))
+    previous_table = doc.table
     if table:
         frappe.db.get_value(TABLE, table, "name", for_update=True)
         twin = frappe.db.exists(ORDER, {"table": table, "status": "Open", "name": ("!=", name)})
@@ -605,6 +615,16 @@ def move_order(name: str, table: str | None = None):
             frappe.throw(_("That table already has an open order ({0})").format(twin))
     doc.table = table or None
     doc.save()
+    if doc.table != previous_table:
+        from lumen_restaurants.api.notifications import notify_event
+
+        notify_event(
+            "table_order_moved",
+            doc.pos_profile,
+            message=doc.table or doc.name,
+            reference_doctype=ORDER,
+            reference_name=doc.name,
+        )
     return _as_dict(doc)
 
 
@@ -638,6 +658,15 @@ def merge_orders(source: str, target: str):
     src.set("items", [])
     src.cart = json.dumps({"lines": []})
     src.save()
+    from lumen_restaurants.api.notifications import notify_event
+
+    notify_event(
+        "table_order_merged",
+        dst.pos_profile,
+        message=f"{src.name} → {dst.name}",
+        reference_doctype=ORDER,
+        reference_name=dst.name,
+    )
     return _as_dict(dst)
 
 
@@ -660,6 +689,15 @@ def cancel_order(name: str, reason: str | None = None):
     doc.cancel_reason = reason or None
     doc.closed_at = now_datetime()
     doc.save()
+    from lumen_restaurants.api.notifications import notify_event
+
+    notify_event(
+        "table_order_cancelled",
+        doc.pos_profile,
+        message=doc.table or doc.name,
+        reference_doctype=ORDER,
+        reference_name=doc.name,
+    )
     return _as_dict(doc)
 
 
@@ -864,6 +902,15 @@ def close_order(name, invoice, amount):
     doc.status = "Closed"
     doc.closed_at = now_datetime()
     doc.save(ignore_permissions=True)
+    from lumen_restaurants.api.notifications import notify_event
+
+    notify_event(
+        "table_order_paid",
+        doc.pos_profile,
+        message=doc.table or doc.name,
+        reference_doctype=ORDER,
+        reference_name=doc.name,
+    )
 
 
 # ---------------------------------------------------------------------------

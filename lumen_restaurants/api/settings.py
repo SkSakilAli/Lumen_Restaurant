@@ -16,6 +16,7 @@ from frappe.utils.password import get_decrypted_password
 from lumen_restaurants import __version__
 from lumen_restaurants import erpnext_compat
 from lumen_restaurants.api import insights
+from lumen_restaurants.api import notifications
 from lumen_restaurants.api import salespeople
 from lumen_restaurants import cash_out, cashback_rules, credit_sales, languages, scope, variance
 
@@ -122,6 +123,10 @@ def get_settings():
         "overdue_alert_role": doc.get("overdue_alert_role") or "",
         "overdue_alert_hours": cint(doc.get("overdue_alert_hours")) or 14,
         "overdue_grace_minutes": cint(doc.get("overdue_grace_minutes")) or 60,
+        "kitchen_notification_role": doc.get("kitchen_notification_role") or "",
+        "bar_notification_role": doc.get("bar_notification_role") or "",
+        "notification_events": notifications.notification_event_options(),
+        "notification_rules": notifications.notification_settings(doc),
         "show_out_of_stock": doc.get("show_out_of_stock") or 0,
         "serial_scan_only": 1 if doc.get("serial_scan_only") else 0,
         "enable_order_discount": 1 if doc.get("enable_order_discount") else 0,
@@ -350,6 +355,37 @@ def save_settings(payload: dict | str):
     doc.overdue_alert_role = payload.get("overdue_alert_role") or None
     doc.overdue_alert_hours = cint(payload.get("overdue_alert_hours")) or 14
     doc.overdue_grace_minutes = cint(payload.get("overdue_grace_minutes")) or 60
+    for field in ("kitchen_notification_role", "bar_notification_role"):
+        if frappe.get_meta("LumenPOS Settings").has_field(field):
+            doc.set(field, payload.get(field) or None)
+    if "notification_rules" in payload:
+        if not frappe.get_meta("LumenPOS Settings").has_field("notification_rules"):
+            frappe.throw(
+                _(
+                    "Notification settings are not installed yet. "
+                    "Run bench migrate and reload the POS."
+                )
+            )
+        from lumen_restaurants.api.notifications import EVENT_BY_KEY
+
+        doc.set("notification_rules", [])
+        seen_rules = set()
+        for row in payload.get("notification_rules") or []:
+            event_type = (row.get("event_type") or "").strip()
+            role = (row.get("role") or "").strip()
+            if not event_type and not role:
+                continue
+            if event_type not in EVENT_BY_KEY:
+                frappe.throw(_("Unknown notification action: {0}").format(event_type))
+            if not role or not frappe.db.exists("Role", role):
+                frappe.throw(_("Select a valid recipient role for {0}.").format(EVENT_BY_KEY[event_type]["label"]))
+            rule = (event_type, role)
+            if rule not in seen_rules:
+                doc.append("notification_rules", {"event_type": event_type, "role": role})
+                seen_rules.add(rule)
+        for field in ("kitchen_notification_role", "bar_notification_role"):
+            if frappe.get_meta("LumenPOS Settings").has_field(field):
+                doc.set(field, None)
     doc.show_out_of_stock = 1 if payload.get("show_out_of_stock") else 0
     doc.serial_scan_only = 1 if payload.get("serial_scan_only") else 0
     doc.enable_order_discount = 1 if payload.get("enable_order_discount") else 0

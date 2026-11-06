@@ -283,6 +283,8 @@ def _make_ticket(profile_name, order_type, items, order_no=None, table_label=Non
     doc.insert(ignore_permissions=True)
     frappe.db.sql("UPDATE `tabPOS Kitchen Ticket` SET `station` = %s WHERE `name` = %s", (station, doc.name))
     doc.station = station
+    from lumen_restaurants.api.notifications import notify_new_ticket
+    notify_new_ticket(doc)
     frappe.db.commit()
     return doc
 
@@ -576,6 +578,10 @@ def set_ticket_status(name: str, status: str):
     for k, v in updates.items():
         frappe.db.set_value(TICKET, name, k, v, update_modified=False)
     frappe.db.set_value(TICKET, name, "modified", now, update_modified=False)
+    if status in {"Preparing", "Ready", "Done"} and doc.status != status:
+        from lumen_restaurants.api.notifications import notify_ticket_status
+
+        notify_ticket_status(doc, status)
     frappe.db.commit()
     return {"status": status}
 

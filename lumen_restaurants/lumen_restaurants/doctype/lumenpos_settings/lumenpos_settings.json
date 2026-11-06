@@ -29,6 +29,10 @@
   "overdue_alert_role",
   "overdue_alert_hours",
   "overdue_grace_minutes",
+  "kitchen_notification_role",
+  "bar_notification_role",
+  "notifications_section",
+  "notification_rules",
   "companies_section",
   "company_settings",
   "profile_receipts_section",
@@ -849,6 +853,29 @@
    "fieldtype": "Int",
    "label": "Grace period (minutes)",
    "description": "How long after the scheduled end before alerting."
+  },
+  {
+   "fieldname": "kitchen_notification_role",
+   "fieldtype": "Link",
+   "label": "Kitchen notification role",
+   "options": "Role"
+  },
+  {
+   "fieldname": "bar_notification_role",
+   "fieldtype": "Link",
+   "label": "Bar notification role",
+   "options": "Role"
+  },
+  {
+   "fieldname": "notifications_section",
+   "fieldtype": "Section Break",
+   "label": "In-app Notifications"
+  },
+  {
+   "fieldname": "notification_rules",
+   "fieldtype": "Table",
+   "label": "Notification Rules",
+   "options": "POS Notification Rule"
   },
   {
    "fieldname": "insights_section",

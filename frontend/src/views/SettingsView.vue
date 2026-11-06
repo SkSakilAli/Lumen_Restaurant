@@ -2314,6 +2314,30 @@
         </p>
       </div>
 
+      <div class="sec-card" v-show="generalSection === 'notifications'">
+        <div class="sec-title"><Icon name="bell" /> {{ t('Notifications') }}</div>
+        <p class="sec-note">
+          {{ t('Choose which business events create an in-app notification and which roles receive it. Add one row per event and role; events without a row stay silent.') }}
+        </p>
+        <div class="cap-rules">
+          <div v-for="(row, i) in generalForm.notification_rules" :key="'notification' + i" class="cap-row">
+            <select v-model="row.event_type" class="cap-what">
+              <option value="">{{ t('Choose an action') }}</option>
+              <option v-for="event in notificationEventOptions" :key="event.value" :value="event.value">
+                {{ t(event.label) }}
+              </option>
+            </select>
+            <LinkPicker doctype="Role" v-model="row.role" :placeholder="t('Recipient role')" />
+            <button class="btn-ghost" type="button" :aria-label="t('Remove notification rule')" @click="generalForm.notification_rules.splice(i, 1)">
+              <Icon name="close" />
+            </button>
+          </div>
+          <button class="btn btn-outline btn-sm" type="button" @click="addNotificationRule">
+            <Icon name="plus" /> {{ t('Add notification rule') }}
+          </button>
+        </div>
+      </div>
+
       <!-- Sticky footer -->
       <div class="editor-footer">
         <span style="flex: 1" />
@@ -2616,6 +2640,9 @@ const capabilityOptions = [
 function addCapabilityRule() {
   generalForm.value.capability_rules.push({ capability: 'Make returns', role: '', user: '' })
 }
+function addNotificationRule() {
+  generalForm.value.notification_rules.push({ event_type: '', role: '' })
+}
 const generalForm = ref({
   till_languages: [],
   delivery_apps: [],
@@ -2668,6 +2695,9 @@ const generalForm = ref({
   overdue_alert_role: '',
   overdue_alert_hours: 14,
   overdue_grace_minutes: 60,
+  kitchen_notification_role: '',
+  bar_notification_role: '',
+  notification_rules: [],
   show_out_of_stock: 0,
   serial_scan_only: 0,
   enable_order_discount: 1,
@@ -2714,6 +2744,7 @@ const generalForm = ref({
   return_reasons: [],
   approvers: [],
 })
+const notificationEventOptions = ref([])
 const logoError = ref(false)
 
 // ---- restaurant tables ----
@@ -2796,6 +2827,7 @@ const keptReason = (value) => reasonByShown.value.get(value) || value
 const generalSections = [
   { key: 'features', label: 'Features', icon: 'bulb' },
   { key: 'register', label: 'Register and shifts', icon: 'store' },
+  { key: 'notifications', label: 'Notifications', icon: 'bell' },
   { key: 'payments', label: 'Payments and delivery', icon: 'card' },
   { key: 'currencies', label: 'Other currencies', icon: 'cash' },
   { key: 'customers', label: 'Customers', icon: 'person' },
@@ -3356,6 +3388,7 @@ async function load() {
   loadTables()
   const info = await call('lumen_restaurants.api.settings.get_settings')
   settingsInfo.value = info
+  notificationEventOptions.value = info.notification_events || []
   reasonKeys.value = [...(info.variance_reasons || []), ...(info.return_reasons || [])]
   profileReceiptOverrides.value = info.profile_receipt_overrides || []
   loadFieldOptions('Sale Invoice')
@@ -3419,6 +3452,9 @@ async function load() {
     overdue_alert_role: info.overdue_alert_role || '',
     overdue_alert_hours: info.overdue_alert_hours || 14,
     overdue_grace_minutes: info.overdue_grace_minutes || 60,
+    kitchen_notification_role: info.kitchen_notification_role || '',
+    bar_notification_role: info.bar_notification_role || '',
+    notification_rules: (info.notification_rules || []).map((r) => ({ ...r })),
     show_out_of_stock: info.show_out_of_stock || 0,
     serial_scan_only: info.serial_scan_only || 0,
     enable_order_discount: info.enable_order_discount ?? 1,
